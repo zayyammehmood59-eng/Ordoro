@@ -51910,5 +51910,337 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <!-- ========================================================= -->
 
+<!-- =========================================================
+     🚀 KODULAR & ANDROID WEBVIEW DOWNLOAD/PDF/BACKUP FIX
+     ========================================================= -->
+<style>
+    /* Kodular & Mobile Backup/Export Popup Styles */
+    .kodular-fix-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.75);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000000;
+        padding: 20px;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+    .kodular-fix-modal.show {
+        opacity: 1;
+        visibility: visible;
+    }
+    .kodular-fix-card {
+        background: #ffffff;
+        border-radius: 24px;
+        padding: 24px;
+        max-width: 440px;
+        width: 100%;
+        box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35);
+        transform: scale(0.9);
+        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        text-align: center;
+    }
+    .kodular-fix-modal.show .kodular-fix-card {
+        transform: scale(1);
+    }
+    .kodular-fix-icon {
+        width: 65px;
+        height: 65px;
+        border-radius: 50%;
+        margin: 0 auto 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.8rem;
+    }
+    .kodular-fix-btns {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 20px;
+    }
+    .kodular-fix-btn {
+        width: 100%;
+        padding: 14px;
+        border-radius: 14px;
+        font-weight: 800;
+        font-size: 0.95rem;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: 0.2s;
+    }
+    .kodular-fix-btn:active {
+        transform: scale(0.97);
+    }
+    .kbtn-share {
+        background: linear-gradient(135deg, #0ea5e9, #0284c7);
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+    }
+    .kbtn-copy {
+        background: #f1f5f9;
+        color: #334155;
+    }
+    .kbtn-close {
+        background: transparent;
+        color: #64748b;
+        font-size: 0.85rem;
+        margin-top: 5px;
+    }
+</style>
+
+<!-- Kodular Export / Share Modal HTML -->
+<div class="kodular-fix-modal" id="kodular-export-modal">
+    <div class="kodular-fix-card">
+        <div class="kodular-fix-icon" id="kfix-icon" style="background:#e0f2fe; color:#0284c7;">
+            <i class="fas fa-file-export"></i>
+        </div>
+        <h3 id="kfix-title" style="margin:0 0 6px 0; color:#0f172a; font-size:1.3rem; font-weight:900;">Save / Share File</h3>
+        <p id="kfix-desc" style="margin:0; font-size:0.85rem; color:#64748b; line-height:1.5;">
+            Android WebView requires sharing to save files to Drive, WhatsApp or your Device Storage.
+        </p>
+
+        <div class="kodular-fix-btns">
+            <button class="kodular-fix-btn kbtn-share" id="kfix-share-btn">
+                <i class="fas fa-share-alt"></i> Save to Device / Share
+            </button>
+            <button class="kodular-fix-btn kbtn-copy" id="kfix-copy-btn">
+                <i class="fas fa-copy"></i> Copy Backup Text
+            </button>
+            <button class="kodular-fix-btn kbtn-close" onclick="document.getElementById('kodular-export-modal').classList.remove('show')">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // -------------------------------------------------------------
+    // 1. HELPER: Android WebView / Kodular Bridge
+    // -------------------------------------------------------------
+    function sendToKodular(action, data) {
+        if (window.AppInventor) {
+            try {
+                window.AppInventor.setWebViewString(JSON.stringify({ action: action, data: data }));
+            } catch(e) {
+                console.log("AppInventor setWebViewString error", e);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 2. UNIVERSAL FILE DOWNLOADER & SHARER FOR KODULAR / MOBILE
+    // -------------------------------------------------------------
+    window.downloadOrShareFile = async function(blob, filename, mimeType, optionalCopyText) {
+        sendToKodular("download", { filename: filename, type: mimeType });
+
+        const file = new File([blob], filename, { type: mimeType });
+
+        // A) اگر براؤزر میں Web Share کی سہولت موجود ہے (Android WebView اسے سپورٹ کرتا ہے)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: filename,
+                    text: `${filename} from Al Mehmood Trader App`
+                });
+                return;
+            } catch (err) {
+                // اگر صارف نے شیئر ڈائیلاگ بند کر دیا تو نیچے فال بیک پاپ اپ دکھائیں
+                if (err.name === 'AbortError') return;
+            }
+        }
+
+        // B) Kodular Modal Popup Fallback (ڈائریکٹ کاپی یا فال بیک ڈاؤنلوڈ)
+        const modal = document.getElementById('kodular-export-modal');
+        const titleEl = document.getElementById('kfix-title');
+        const descEl = document.getElementById('kfix-desc');
+        const iconEl = document.getElementById('kfix-icon');
+        const shareBtn = document.getElementById('kfix-share-btn');
+        const copyBtn = document.getElementById('kfix-copy-btn');
+
+        titleEl.textContent = filename.endsWith('.pdf') ? "PDF Ready" : "Backup Ready";
+        descEl.textContent = `File "${filename}" is ready. Tap below to save to your device storage, Google Drive or WhatsApp.`;
+        
+        if (filename.endsWith('.pdf')) {
+            iconEl.style.background = "#fee2e2";
+            iconEl.style.color = "#dc2626";
+            iconEl.innerHTML = '<i class="fas fa-file-pdf"></i>';
+            copyBtn.style.display = 'none';
+        } else {
+            iconEl.style.background = "#dcfce7";
+            iconEl.style.color = "#16a34a";
+            iconEl.innerHTML = '<i class="fas fa-database"></i>';
+            copyBtn.style.display = optionalCopyText ? 'flex' : 'none';
+        }
+
+        shareBtn.onclick = async () => {
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({ files: [file], title: filename });
+                    modal.classList.remove('show');
+                    return;
+                } catch(e) {}
+            }
+            // Standard blob click fallback
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+            modal.classList.remove('show');
+        };
+
+        if (optionalCopyText) {
+            copyBtn.onclick = () => {
+                navigator.clipboard.writeText(optionalCopyText).then(() => {
+                    if (typeof showMessage === 'function') showMessage("Backup Data copied to clipboard!", "success");
+                    else alert("Backup Copied!");
+                    modal.classList.remove('show');
+                });
+            };
+        }
+
+        modal.classList.add('show');
+    };
+
+    // -------------------------------------------------------------
+    // 3. FIX: OVERRIDE jsPDF doc.save(...) FOR KODULAR
+    // -------------------------------------------------------------
+    function hookJsPDF() {
+        if (!window.jspdf || !window.jspdf.jsPDF) return;
+        const originalSave = window.jspdf.jsPDF.prototype.save;
+        
+        window.jspdf.jsPDF.prototype.save = function(filename, options) {
+            try {
+                const blob = this.output('blob');
+                const safeName = filename || 'document.pdf';
+                window.downloadOrShareFile(blob, safeName, 'application/pdf');
+            } catch(err) {
+                console.error("jsPDF hooked save error, using default:", err);
+                originalSave.call(this, filename, options);
+            }
+        };
+        console.log("✅ jsPDF output hooked for Android WebView / Kodular.");
+    }
+    hookJsPDF();
+    setTimeout(hookJsPDF, 1500);
+
+    // -------------------------------------------------------------
+    // 4. FIX: OVERRIDE EXPORT BACKUP FUNCTION (exportData)
+    // -------------------------------------------------------------
+    const checkExportLoop = setInterval(() => {
+        if (typeof window.exportData !== 'undefined') {
+            const originalExport = window.exportData;
+
+            window.exportData = async function(event) {
+                // ایڈمن اور سبسکرپشن چیکس برقرار رکھیں
+                const now = Date.now();
+                const isPaidPlan = appStatus.isActivated || (appStatus.expiryDate && now < appStatus.expiryDate);
+                const isTrialPlan = appStatus.trialEndDate && now < appStatus.trialEndDate;
+
+                if (isTrialPlan && !isPaidPlan) {
+                    return showMessage('Data backup is a premium feature. Please purchase a subscription.', 'error');
+                }
+                if (!hasAdminAccess()) {
+                    return showMessage("This is a premium feature. Please activate to use.", "error");
+                }
+
+                // پرانا ڈیٹا محفوظ کریں
+                const backupPayload = {
+                    customProducts: typeof customProducts !== 'undefined' ? customProducts : {},
+                    customCategories: typeof customCategories !== 'undefined' ? customCategories : {},
+                    productStocks: typeof productStocks !== 'undefined' ? productStocks : {},
+                    salesData: typeof salesData !== 'undefined' ? salesData : {},
+                    orderHistory: typeof orderHistory !== 'undefined' ? orderHistory : [],
+                    deletedOrders: typeof deletedOrders !== 'undefined' ? deletedOrders : [],
+                    returnsHistory: typeof returnsHistory !== 'undefined' ? returnsHistory : [],
+                    headerInfo: typeof headerInfo !== 'undefined' ? headerInfo : {},
+                    themeSettings: typeof themeSettings !== 'undefined' ? themeSettings : {},
+                    buttonThemeSettings: typeof buttonThemeSettings !== 'undefined' ? buttonThemeSettings : {},
+                    appSettings: typeof appSettings !== 'undefined' ? appSettings : {},
+                    adminPassword: typeof adminPassword !== 'undefined' ? adminPassword : "almehmood733",
+                    appStatus: typeof appStatus !== 'undefined' ? appStatus : {},
+                    notificationSettings: typeof notificationSettings !== 'undefined' ? notificationSettings : {},
+                    customerPayments: typeof customerPayments !== 'undefined' ? customerPayments : {},
+                    dailyActivity: typeof dailyActivity !== 'undefined' ? dailyActivity : {},
+                    userRewards: typeof userRewards !== 'undefined' ? userRewards : {},
+                    productSalesIndex: typeof productSalesIndex !== 'undefined' ? productSalesIndex : {},
+                    staffMembers: typeof staffMembers !== 'undefined' ? staffMembers : {},
+                    shopExpenses: typeof shopExpenses !== 'undefined' ? shopExpenses : [],
+                    shopInvestments: typeof shopInvestments !== 'undefined' ? shopInvestments : [],
+                    vSuppliers: typeof vSuppliers !== 'undefined' ? vSuppliers : {},
+                    timestamp: new Date().toISOString()
+                };
+
+                const jsonString = JSON.stringify(backupPayload, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const backupFilename = `AMT_Backup_${new Date().toISOString().split('T')[0]}.json`;
+
+                // Kodular / Android WebView پر فائل شیئر اور کاپی مینو چلائیں
+                window.downloadOrShareFile(blob, backupFilename, 'application/json', jsonString);
+            };
+
+            clearInterval(checkExportLoop);
+            console.log("✅ Backup Export fixed for Kodular WebView.");
+        }
+    }, 500);
+
+    // -------------------------------------------------------------
+    // 5. BONUS: RESTORE BACKUP VIA TEXT (اگر Kodular میں فائل اپلوڈ بلاک ہو)
+    // -------------------------------------------------------------
+    setTimeout(() => {
+        const importBtn = document.getElementById('import-backup-btn');
+        if (importBtn && !document.getElementById('paste-backup-btn')) {
+            const pasteBtn = document.createElement('button');
+            pasteBtn.id = 'paste-backup-btn';
+            pasteBtn.className = 'action-button native-menu-item';
+            pasteBtn.innerHTML = `
+                <div class="native-menu-icon" style="background:#fee2e2; color:#dc2626;"><i class="fas fa-paste"></i></div>
+                <span class="native-menu-text">Restore via Pasted Code</span>
+                <i class="fas fa-chevron-right native-menu-chevron"></i>
+            `;
+            importBtn.insertAdjacentElement('afterend', pasteBtn);
+
+            pasteBtn.onclick = () => {
+                const text = prompt("Paste your Backup JSON text here:");
+                if (!text) return;
+                try {
+                    const data = JSON.parse(text);
+                    if (data.productStocks || data.customProducts) {
+                        if (confirm("Restore this data? All current data will be replaced.")) {
+                            for (let key in data) {
+                                if (key !== 'timestamp') {
+                                    localStorage.setItem(key, typeof data[key] === 'string' ? data[key] : JSON.stringify(data[key]));
+                                }
+                            }
+                            alert("Data Restored Successfully!");
+                            location.reload();
+                        }
+                    } else {
+                        alert("Invalid backup structure.");
+                    }
+                } catch(err) {
+                    alert("Invalid JSON format! Make sure you copied full text.");
+                }
+            };
+        }
+    }, 2500);
+})();
+</script>
+<!-- ========================================================= -->
+
   </body>
 </html>
