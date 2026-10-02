@@ -51909,7 +51909,317 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 <!-- ========================================================= -->
+<!-- =========================================================
+     📱 MEDIAN.CO (GONATIVE) BACKUP & SHARE API OVERRIDE PATCH
+     ========================================================= -->
+<style>
+    /* Median.co Text Backup Modal */
+    #median-backup-fallback-modal {
+        z-index: 10000002 !important;
+    }
+    #median-backup-fallback-modal .modal-content {
+        max-width: 520px;
+        background: #ffffff !important;
+        border-radius: 20px !important;
+        padding: 20px !important;
+        box-shadow: 0 25px 50px rgba(0,0,0,0.3) !important;
+    }
+    .m-backup-textarea {
+        width: 100%;
+        height: 180px;
+        border: 2px dashed #cbd5e1;
+        border-radius: 12px;
+        padding: 12px;
+        font-family: monospace;
+        font-size: 0.8rem;
+        color: #1e293b;
+        background: #f8fafc;
+        resize: none;
+        outline: none;
+        word-break: break-all;
+    }
+    .m-backup-btn-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 15px;
+    }
+    .m-action-btn {
+        padding: 12px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 0.9rem;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: transform 0.15s ease;
+    }
+    .m-action-btn:active { transform: scale(0.95); }
+    .m-copy-btn { background: #0ea5e9; color: white; }
+    .m-wa-btn { background: #25D366; color: white; }
+    .m-file-btn { background: #10b981; color: white; grid-column: span 2; }
+    .m-close-btn { background: #f1f5f9; color: #475569; width: 100%; margin-top: 8px; }
+</style>
 
+<!-- Median.co Backup Fallback Dialog -->
+<div class="modal-overlay" id="median-backup-fallback-modal">
+    <div class="modal-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="margin:0; font-size:1.15rem; color:#0f172a; display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-shield-alt" style="color:#0ea5e9;"></i> Data Backup Ready
+            </h3>
+            <button class="modal-close-btn" onclick="document.getElementById('median-backup-fallback-modal').classList.remove('show')">&times;</button>
+        </div>
+        <p style="font-size:0.85rem; color:#64748b; margin-top:0; margin-bottom:10px;">
+            اگر آپ کا موبائل فائل کھولنے کی اجازت نہ دے تو نیچے دیے گئے <b>Copy Backup Code</b> پر کلک کر کے واٹس ایپ پر اپنے آپ کو میسج بھیج دیں یا فائل ڈاؤنلوڈ کریں۔
+        </p>
+        <textarea id="median-backup-raw-text" class="m-backup-textarea" readonly></textarea>
+        
+        <div class="m-backup-btn-grid">
+            <button class="m-action-btn m-copy-btn" id="m-btn-copy-code">
+                <i class="fas fa-copy"></i> Copy Backup Code
+            </button>
+            <button class="m-action-btn m-wa-btn" id="m-btn-share-wa">
+                <i class="fab fa-whatsapp"></i> Send to WhatsApp
+            </button>
+            <button class="m-action-btn m-file-btn" id="m-btn-direct-download">
+                <i class="fas fa-download"></i> Save as File (.json)
+            </button>
+        </div>
+        <button class="m-action-btn m-close-btn" onclick="document.getElementById('median-backup-fallback-modal').classList.remove('show')">
+            Close
+        </button>
+    </div>
+</div>
+
+<script>
+(function() {
+    // -------------------------------------------------------------
+    // 1. Median.co Environment Detection & Helpers
+    // -------------------------------------------------------------
+    function isMedianApp() {
+        return !!(window.median || window.gonative || navigator.userAgent.indexOf('median') > -1 || navigator.userAgent.indexOf('gonative') > -1);
+    }
+
+    // Helper: Safely open link via Median bridge or window
+    function safeOpenUrl(url) {
+        if (window.median && window.median.open) {
+            window.median.open({ url: url });
+        } else if (window.gonative && window.gonative.open) {
+            window.gonative.open({ url: url });
+        } else {
+            window.open(url, '_blank');
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 2. Universal Share Fix (Works on Browser & WebView/APK)
+    // -------------------------------------------------------------
+    window.safeShareData = async function(title, text, url) {
+        // A) Median native share bridge
+        if (window.median && window.median.share) {
+            window.median.share.sharePage({ title: title, text: text, url: url || '' });
+            return true;
+        }
+        if (window.gonative && window.gonative.share) {
+            window.gonative.share.sharePage({ title: title, text: text, url: url || '' });
+            return true;
+        }
+
+        // B) Web Share API (only if supported and not throwing)
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: title, text: text, url: url || undefined });
+                return true;
+            } catch (err) {
+                if (err.name === 'AbortError') return true; // User cancelled
+            }
+        }
+
+        // C) Clipboard Fallback
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText((text ? text + '\n' : '') + (url || ''));
+                if (typeof showMessage === 'function') showMessage('Copied to clipboard!', 'success');
+                return true;
+            }
+        } catch(e) {}
+
+        // D) Direct WhatsApp fallback
+        const waMsg = encodeURIComponent((title ? '*' + title + '*\n\n' : '') + text + (url ? '\n' + url : ''));
+        window.open('https://api.whatsapp.com/send?text=' + waMsg, '_blank');
+        return true;
+    };
+
+    // -------------------------------------------------------------
+    // 3. Export Data Override (Bypasses "Could not find app to open")
+    // -------------------------------------------------------------
+    window.exportData = async function(event) {
+        let btn = event ? (event.currentTarget || event.target) : document.getElementById('export-backup-btn');
+        let originalContent = btn ? btn.innerHTML : '';
+        if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, true);
+
+        // Plan & Permission Check
+        const now = Date.now();
+        const isPaidPlan = (typeof appStatus !== 'undefined') && (appStatus.isActivated || (appStatus.expiryDate && now < appStatus.expiryDate));
+        const isTrialPlan = (typeof appStatus !== 'undefined') && (appStatus.trialEndDate && now < appStatus.trialEndDate);
+
+        if (isTrialPlan && !isPaidPlan) {
+            if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, false, originalContent);
+            return showMessage('Data backup is a premium feature. Please purchase a subscription.', 'error');
+        }
+
+        if (typeof hasAdminAccess === 'function' && !hasAdminAccess()) {
+            if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, false, originalContent);
+            return showMessage("This is a premium feature. Please activate to use.", "error");
+        }
+
+        // Prepare backup JSON
+        const backupData = {
+            customProducts: typeof customProducts !== 'undefined' ? customProducts : {},
+            customCategories: typeof customCategories !== 'undefined' ? customCategories : {},
+            productStocks: typeof productStocks !== 'undefined' ? productStocks : {},
+            salesData: typeof salesData !== 'undefined' ? salesData : {},
+            orderHistory: typeof orderHistory !== 'undefined' ? orderHistory : [],
+            deletedOrders: typeof deletedOrders !== 'undefined' ? deletedOrders : [],
+            returnsHistory: typeof returnsHistory !== 'undefined' ? returnsHistory : [],
+            headerInfo: typeof headerInfo !== 'undefined' ? headerInfo : {},
+            themeSettings: typeof themeSettings !== 'undefined' ? themeSettings : {},
+            buttonThemeSettings: typeof buttonThemeSettings !== 'undefined' ? buttonThemeSettings : {},
+            appSettings: typeof appSettings !== 'undefined' ? appSettings : {},
+            adminPassword: typeof adminPassword !== 'undefined' ? adminPassword : "almehmood733",
+            appStatus: typeof appStatus !== 'undefined' ? appStatus : {},
+            notificationSettings: typeof notificationSettings !== 'undefined' ? notificationSettings : {},
+            customerPayments: typeof customerPayments !== 'undefined' ? customerPayments : {},
+            dailyActivity: typeof dailyActivity !== 'undefined' ? dailyActivity : {},
+            userRewards: typeof userRewards !== 'undefined' ? userRewards : {},
+            productSalesIndex: typeof productSalesIndex !== 'undefined' ? productSalesIndex : {},
+            staffMembers: typeof staffMembers !== 'undefined' ? staffMembers : {},
+            backupDate: new Date().toISOString()
+        };
+
+        const jsonString = JSON.stringify(backupData, null, 2);
+        const fileName = `al-mehmood-backup-${new Date().toISOString().split('T')[0]}.json`;
+
+        if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, false, originalContent);
+
+        // Open custom Median-safe modal
+        const modal = document.getElementById('median-backup-fallback-modal');
+        const rawText = document.getElementById('median-backup-raw-text');
+        rawText.value = jsonString;
+
+        // Button A: Copy
+        document.getElementById('m-btn-copy-code').onclick = function() {
+            rawText.select();
+            document.execCommand('copy');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(jsonString);
+            }
+            if (typeof showMessage === 'function') showMessage('Backup code copied! Paste it in safe place.', 'success');
+        };
+
+        // Button B: Send via WhatsApp (File/Text)
+        document.getElementById('m-btn-share-wa').onclick = function() {
+            const shortSum = `*AL MEHMOOD TRADER BACKUP*\nDate: ${new Date().toLocaleDateString()}\nProducts: ${Object.keys(backupData.customProducts).length}\nOrders: ${backupData.orderHistory.length}\n\nBackup Data Code:\n${jsonString}`;
+            const waUrl = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(shortSum.substring(0, 4000)); // limit length
+            safeOpenUrl(waUrl);
+        };
+
+        // Button C: Direct File Download (Uses Data URI instead of blob: to bypass Median Android handler)
+        document.getElementById('m-btn-direct-download').onclick = function() {
+            try {
+                // Use data:text/json URI which browsers & webviews handle as raw file
+                const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonString);
+                const a = document.createElement('a');
+                a.href = dataUri;
+                a.download = fileName;
+                a.target = '_blank';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => a.remove(), 200);
+
+                if (typeof showMessage === 'function') showMessage('Downloading backup file...', 'success');
+            } catch (err) {
+                // Fallback to text copy if direct download is completely blocked
+                rawText.select();
+                document.execCommand('copy');
+                alert('Download is blocked in APK. Backup text has been copied to your clipboard!');
+            }
+        };
+
+        modal.classList.add('show');
+    };
+
+    // -------------------------------------------------------------
+    // 4. Import Data Enhancement (Supports Both File & Pasted Code)
+    // -------------------------------------------------------------
+    const oldImportBtn = document.getElementById('import-backup-btn');
+    if (oldImportBtn) {
+        const newImportBtn = oldImportBtn.cloneNode(true);
+        oldImportBtn.parentNode.replaceChild(newImportBtn, oldImportBtn);
+
+        newImportBtn.addEventListener('click', () => {
+            const choice = confirm("Do you want to restore from a .json FILE?\n\n[OK] = Choose File from Device\n[Cancel] = Paste Backup Text Code directly");
+            if (choice) {
+                document.getElementById('import-file-input').click();
+            } else {
+                const pasted = prompt("Paste your Backup Text Code here:");
+                if (!pasted || !pasted.trim()) return;
+
+                try {
+                    const data = JSON.parse(pasted.trim());
+                    if (data.productStocks || data.orderHistory || data.customProducts) {
+                        if (confirm("This will replace all shop data. Continue?")) {
+                            restoreDataFromParsedObject(data);
+                        }
+                    } else {
+                        alert("Invalid backup code format.");
+                    }
+                } catch(e) {
+                    alert("Error parsing backup code. Make sure you copied full code.");
+                }
+            }
+        });
+    }
+
+    function restoreDataFromParsedObject(data) {
+        const keys = [
+            'customProducts', 'customCategories', 'productStocks', 'salesData',
+            'orderHistory', 'deletedOrders', 'returnsHistory', 'headerInfo',
+            'themeSettings', 'buttonThemeSettings', 'appSettings', 'adminPassword',
+            'appStatus', 'notificationSettings', 'customerPayments', 'dailyActivity',
+            'userRewards', 'productSalesIndex', 'staffMembers'
+        ];
+
+        keys.forEach(k => {
+            if (data[k] !== undefined) {
+                localStorage.setItem(k, typeof data[k] === 'string' ? data[k] : JSON.stringify(data[k]));
+            }
+        });
+
+        alert('Backup successfully restored! Restarting app...');
+        window.location.reload();
+    }
+
+    // -------------------------------------------------------------
+    // 5. Replace Existing Event Listener on Export Button
+    // -------------------------------------------------------------
+    const exportBtn = document.getElementById('export-backup-btn');
+    if (exportBtn) {
+        const freshExportBtn = exportBtn.cloneNode(true);
+        exportBtn.parentNode.replaceChild(freshExportBtn, exportBtn);
+        freshExportBtn.addEventListener('click', window.exportData);
+    }
+
+})();
+</script>
+<!-- ========================================================= -->
+
+</body>
+</html>
 
   </body>
 </html>
