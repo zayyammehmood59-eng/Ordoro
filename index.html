@@ -52091,59 +52091,59 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script>
 (function() {
-    // Local Persistence set karein
-    if (typeof firebase !== 'undefined' && firebase.auth) {
-        firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
-    }
-
-    // Google Login Function (Popup Mode)
+    // Global Login Function
     window.loginAsOwner = function() {
         if (typeof showCloudToast === 'function') {
             showCloudToast('loading', 'Google Login Ho Raha Hai...');
         }
         
-        const provider = new firebase.auth.GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
+        // Local Persistence enable karein taakay login session save rahe
+        firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+            .then(() => {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: 'select_account' });
 
-        // WebView ke andar signInWithPopup use karein
-        firebase.auth().signInWithPopup(provider).then(async (result) => {
-            if (result && result.user) {
-                const uid = result.user.uid;
-                
-                localStorage.setItem('user_role', 'owner');
-                localStorage.removeItem('linked_shop_uid');
+                // Popup Mode (Chrome aur GitHub Pages ke liye 100% working)
+                return firebase.auth().signInWithPopup(provider);
+            })
+            .then(async (result) => {
+                if (result && result.user) {
+                    const uid = result.user.uid;
+                    
+                    localStorage.setItem('user_role', 'owner');
+                    localStorage.removeItem('linked_shop_uid');
 
-                // Realtime Database Link Code Check
-                if (firebase.database) {
-                    const rtdb = firebase.database();
-                    try {
-                        const sn = await rtdb.ref('stores/' + uid + '/linkCode').once('value');
-                        if (!sn.exists() || sn.val() === null || sn.val() === "ERROR") {
-                            const linkCode = Math.floor(10000 + Math.random() * 90000).toString();
-                            await rtdb.ref('link_codes/' + linkCode).set(uid);
-                            await rtdb.ref('stores/' + uid + '/linkCode').set(linkCode);
+                    // Realtime Database Link Code Check
+                    if (firebase.database) {
+                        const rtdb = firebase.database();
+                        try {
+                            const sn = await rtdb.ref('stores/' + uid + '/linkCode').once('value');
+                            if (!sn.exists() || sn.val() === null || sn.val() === "ERROR") {
+                                const linkCode = Math.floor(10000 + Math.random() * 90000).toString();
+                                await rtdb.ref('link_codes/' + linkCode).set(uid);
+                                await rtdb.ref('stores/' + uid + '/linkCode').set(linkCode);
+                            }
+                        } catch (err) {
+                            console.error("Link code error:", err);
                         }
-                    } catch (err) {
-                        console.error("Link code setup error:", err);
                     }
-                }
 
-                if (typeof showCloudToast === 'function') {
-                    showCloudToast('success', 'Google Login Successful!');
-                }
+                    if (typeof showCloudToast === 'function') {
+                        showCloudToast('success', 'Google Login Successful!');
+                    }
 
-                setTimeout(() => {
-                    location.reload();
-                }, 800);
-            }
-        }).catch((error) => {
-            console.error("Popup Login Error:", error);
-            if (typeof showCloudToast === 'function') {
-                showCloudToast('error', error.message || 'Login Failed');
-            } else {
-                alert("Login Error: " + error.message);
-            }
-        });
+                    setTimeout(() => {
+                        location.reload();
+                    }, 800);
+                }
+            })
+            .catch((error) => {
+                console.error("Login Error:", error);
+                // Agar user khud popup band kare toh tension na lein
+                if (error.code !== 'auth/popup-closed-by-user') {
+                    alert("Login Error: " + error.message);
+                }
+            });
     };
 
     window.loginAsOwnerGoogle = window.loginAsOwner;
