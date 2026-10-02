@@ -52149,5 +52149,242 @@ document.addEventListener('DOMContentLoaded', () => {
     window.loginAsOwnerGoogle = window.loginAsOwner;
 })();
 </script>
+
+<!-- =========================================================
+     💎 COMPLETE A-TO-Z BACKUP, RESTORE & CLOUD SYNC ENGINE
+     (Covers Products, Khata, Orders, Expenses, Vendors & Settings)
+     ========================================================= -->
+<script>
+(function() {
+
+    // 1. تمام ضروری کیز کی فہرست (A to Z Keys List)
+    const ALL_APP_KEYS = [
+        'customProducts',
+        'customCategories',
+        'productStocks',
+        'salesData',
+        'orderHistory',
+        'deletedOrders',
+        'deletedProducts',
+        'deletedCategories',
+        'returnsHistory',
+        'headerInfo',
+        'themeSettings',
+        'buttonThemeSettings',
+        'appSettings',
+        'adminPassword',
+        'appStatus',
+        'userRewards',
+        'notificationSettings',
+        'customerPayments',
+        'customerPhones',
+        'customerCreditLimits',
+        'customerRecoveryDays',
+        'customerRewards',
+        'explicitCustomers',
+        'staffMembers',
+        'shopExpenses',          // روزانہ کے خرچے (Shop & Home)
+        'expenseCategories',     // خرچوں کی کیٹیگریز
+        'shopInvestments',       // بزنس انویسٹمنٹ
+        'suppliers',             // وینڈرز اور کمپنی کھاتہ + بلز
+        'purchaseHistory',       // مال کی خریداری کا ریکارڈ
+        'quotationHistory',      // تمام کوٹیشنز
+        'deals',                 // پیکجز اور ڈیلز
+        'heldOrders',            // روکے ہوئے آرڈرز (Hold)
+        'currentRegister',       // کیش دراز اور شفٹ
+        'registerHistory',       // بند شدہ شفٹوں کا ریکارڈ
+        'shopHolidays',          // چھٹیوں کا شیڈول
+        'proNotesDB_v2',         // 10 ٹیبز والے نوٹس
+        'shopNotes',             // پرانے نوٹس
+        'profilePicture',        // دکان کا لوگو / ڈی پی
+        'amtFeaturedPins',       // پن کیے گئے بٹنز
+        'reports_grid_layout',   // گرڈ سیٹنگز
+        'amt_hwid',              // ڈیوائس آئی ڈی
+        'amt_cycle'              // ایکٹیویشن سائیکل
+    ];
+
+    // =========================================================
+    // 2. 📤 EXPORT BACKUP FUNCTION (100% COMPLETE A TO Z)
+    // =========================================================
+    window.exportData = async function(event) {
+        const btn = (event && event.currentTarget) ? event.currentTarget : document.getElementById('export-backup-btn');
+        const originalContent = btn ? btn.innerHTML : '';
+        if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, true);
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // مکمل ڈیٹا آبجیکٹ تیار کریں
+        const fullBackup = {
+            version: "2.0-ULTIMATE",
+            exportedAt: new Date().toISOString(),
+            shopName: (typeof headerInfo !== 'undefined' && headerInfo.title) ? headerInfo.title : "AMT_Shop",
+            data: {}
+        };
+
+        ALL_APP_KEYS.forEach(key => {
+            const rawVal = localStorage.getItem(key);
+            if (rawVal !== null) {
+                try {
+                    fullBackup.data[key] = JSON.parse(rawVal);
+                } catch (e) {
+                    fullBackup.data[key] = rawVal; // اگر سٹرنگ ہو
+                }
+            }
+        });
+
+        const jsonString = JSON.stringify(fullBackup, null, 2);
+        const fileName = `AMT_Complete_Backup_${new Date().toISOString().split('T')[0]}.json`;
+
+        // محفوظ ڈاؤن لوڈ چلائیں (Median APK + تمام براؤزرز کے لیے محفوظ)
+        if (typeof window.downloadMedianFile === 'function') {
+            window.downloadMedianFile(fileName, jsonString, 'application/json');
+        } else {
+            try {
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                if (typeof showMessage === 'function') showMessage("A to Z Backup Exported Successfully!", "success");
+            } catch (err) {
+                alert("ڈاؤنلوڈ میں خرابی: فائل ٹیکسٹ موڈ میں محفوظ کی جا رہی ہے۔");
+            }
+        }
+
+        if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, false, originalContent);
+    };
+
+    // =========================================================
+    // 3. 📥 IMPORT / RESTORE BACKUP FUNCTION (ALL DATA INCLUDED)
+    // =========================================================
+    window.importData = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const parsed = JSON.parse(e.target.result);
+                const backupPayload = parsed.data ? parsed.data : parsed; // پرانا فارمیٹ ہو یا نیا دونوں ہینڈل کرے گا
+
+                if (!confirm("⚠️ خبردار!\n\nکیا آپ واقعی یہ بیک اپ ری اسٹور کرنا چاہتے ہیں؟\nآپ کے تمام پرانے پروڈکٹس، کھاتہ، بل، اخراجات اور وینڈرز کا ڈیٹا اس نئے بیک اپ سے بدل دیا جائے گا۔")) {
+                    event.target.value = '';
+                    return;
+                }
+
+                let restoredCount = 0;
+                ALL_APP_KEYS.forEach(key => {
+                    if (backupPayload[key] !== undefined) {
+                        const val = typeof backupPayload[key] === 'string' ? backupPayload[key] : JSON.stringify(backupPayload[key]);
+                        localStorage.setItem(key, val);
+                        restoredCount++;
+                    }
+                });
+
+                // اگر کلاؤڈ سنک ہو تو فوراً کلاؤڈ پر بھیج دیں
+                if (typeof pushToCloud === 'function') {
+                    pushToCloud(true);
+                }
+
+                alert(`✅ زبردست!\n\nپوری ایپ کا بیک اپ کامیابی سے ری اسٹور ہو گیا ہے۔ (${restoredCount} حصے بحال ہوئے)\nایپ خود بخود ری لوڈ ہو رہی ہے۔`);
+                setTimeout(() => window.location.reload(true), 800);
+
+            } catch (err) {
+                console.error("Restore Error:", err);
+                alert("بیک اپ فائل درست نہیں ہے یا فائل خراب ہو چکی ہے۔");
+            } finally {
+                event.target.value = '';
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    // =========================================================
+    // 4. 🌐 CLOUD AUTO-SYNC OVERRIDE (FULL A TO Z SYNC)
+    // =========================================================
+    if (typeof window.pushToCloud === 'function') {
+        window.pushToCloud = async function(isAuto = false) {
+            const targetUid = typeof getTargetUid === 'function' ? getTargetUid() : null;
+            if (!targetUid || typeof firebase === 'undefined' || !firebase.database) return;
+
+            const rtdb = firebase.database();
+            const timestamp = Date.now();
+
+            // فائر بیس پر پورا ڈیٹا پیک کر کے بھیجیں
+            const cloudPayload = { ts: timestamp };
+            ALL_APP_KEYS.forEach(key => {
+                cloudPayload[key] = localStorage.getItem(key) || '';
+            });
+
+            try {
+                localStorage.setItem('cloud_last_ts', timestamp);
+                await rtdb.ref('stores/' + targetUid + '/completeData').set(cloudPayload);
+                if (typeof showCloudToast === 'function') {
+                    showCloudToast('success', isAuto ? 'Cloud Synced (All Data)' : 'Full Backup Saved to Cloud!');
+                }
+            } catch (e) {
+                console.error("Cloud push failed:", e);
+                if (typeof showCloudToast === 'function') showCloudToast('error', 'Cloud Sync Failed!');
+            }
+        };
+    }
+
+    if (typeof window.pullFromCloud === 'function') {
+        window.pullFromCloud = function() {
+            const targetUid = typeof getTargetUid === 'function' ? getTargetUid() : null;
+            if (!targetUid || typeof firebase === 'undefined' || !firebase.database) return;
+
+            if (!confirm("⚠️ کلاؤڈ سے پورا ڈیٹا ڈاؤنلوڈ کریں؟ موجودہ ڈیٹا کلاؤڈ والے ڈیٹا سے بدل جائے گا۔")) return;
+
+            if (typeof showCloudToast === 'function') showCloudToast('loading', 'Downloading Full Database...');
+
+            const rtdb = firebase.database();
+            rtdb.ref('stores/' + targetUid + '/completeData').once('value').then(sn => {
+                if (sn.exists()) {
+                    const cloudData = sn.val();
+                    ALL_APP_KEYS.forEach(key => {
+                        if (cloudData[key] !== undefined && cloudData[key] !== '') {
+                            localStorage.setItem(key, cloudData[key]);
+                        }
+                    });
+                    localStorage.setItem('cloud_last_ts', cloudData.ts || Date.now());
+
+                    if (typeof showCloudToast === 'function') showCloudToast('success', 'Full Data Restored!');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    if (typeof showCloudToast === 'function') showCloudToast('error', 'No cloud data found.');
+                }
+            }).catch(err => {
+                console.error("Cloud pull error:", err);
+                if (typeof showCloudToast === 'function') showCloudToast('error', 'Download Error!');
+            });
+        };
+    }
+
+    // ایونٹ لسنرز کو فوری بائنڈ کریں
+    setTimeout(() => {
+        const expBtn = document.getElementById('export-backup-btn');
+        if (expBtn) {
+            expBtn.onclick = function(e) {
+                e.preventDefault();
+                window.exportData(e);
+            };
+        }
+
+        const impInput = document.getElementById('import-file-input');
+        if (impInput) {
+            impInput.onchange = function(e) {
+                window.importData(e);
+            };
+        }
+    }, 1000);
+
+})();
+</script>
+<!-- ========================================================= -->
   </body>
 </html>
