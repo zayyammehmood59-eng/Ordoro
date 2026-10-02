@@ -52090,26 +52090,31 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 
-<!-- =========================================================
-     🔑 FIREBASE GOOGLE AUTH: REDIRECT MODE FIX (FOR ANDROID/WEBVIEWS)
-     ========================================================= -->
-<script>
+<<script>
 (function() {
-    // 1. Jab page load ya redirect ho kar wapas aaye toh login result handle karein
+    // Local Persistence set karein
     if (typeof firebase !== 'undefined' && firebase.auth) {
-        
-        // Local Storage Persistence Enable Karein (Safed screen error rokne ke liye)
         firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
+    }
 
-        firebase.auth().getRedirectResult().then(async (result) => {
+    // Google Login Function (Popup Mode)
+    window.loginAsOwner = function() {
+        if (typeof showCloudToast === 'function') {
+            showCloudToast('loading', 'Google Login Ho Raha Hai...');
+        }
+        
+        const provider = new firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+
+        // WebView ke andar signInWithPopup use karein
+        firebase.auth().signInWithPopup(provider).then(async (result) => {
             if (result && result.user) {
                 const uid = result.user.uid;
                 
-                // Local role aur status set karein
                 localStorage.setItem('user_role', 'owner');
                 localStorage.removeItem('linked_shop_uid');
 
-                // Realtime Database se link code check aur set karein
+                // Realtime Database Link Code Check
                 if (firebase.database) {
                     const rtdb = firebase.database();
                     try {
@@ -52126,52 +52131,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (typeof showCloudToast === 'function') {
                     showCloudToast('success', 'Google Login Successful!');
-                } else if (typeof showMessage === 'function') {
-                    showMessage('Google Login Successful!', 'success');
                 }
 
-                // Screen ko sync karne ke liye reload karein
                 setTimeout(() => {
                     location.reload();
                 }, 800);
             }
         }).catch((error) => {
-            console.error("Redirect Login Error:", error);
+            console.error("Popup Login Error:", error);
             if (typeof showCloudToast === 'function') {
-                showCloudToast('error', error.message || 'Google Login Failed');
-            } else if (typeof showMessage === 'function') {
-                showMessage(error.message || 'Google Login Failed', 'error');
+                showCloudToast('error', error.message || 'Login Failed');
+            } else {
+                alert("Login Error: " + error.message);
             }
         });
-    }
-
-    // 2. Login button ke liye global function
-    window.loginAsOwner = function() {
-        if (typeof showCloudToast === 'function') {
-            showCloudToast('loading', 'Redirecting to Google Login...');
-        }
-        
-        const provider = new firebase.auth.GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
-        
-        // Local Persistence ke sath Redirect initiate karein
-        firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-            .then(() => {
-                return firebase.auth().signInWithRedirect(provider);
-            })
-            .catch((error) => {
-                console.error("Sign-in Redirect Error:", error);
-                if (typeof showCloudToast === 'function') {
-                    showCloudToast('error', error.message);
-                } else {
-                    alert("Login Error: " + error.message);
-                }
-            });
     };
 
-    // Backup mapping
     window.loginAsOwnerGoogle = window.loginAsOwner;
-
 })();
 </script>
   </body>
