@@ -52151,240 +52151,288 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <!-- =========================================================
-     💎 COMPLETE A-TO-Z BACKUP, RESTORE & CLOUD SYNC ENGINE
-     (Covers Products, Khata, Orders, Expenses, Vendors & Settings)
+     💎 MODULAR INDEPENDENT BACKUP & RESTORE SYSTEM (ADMIN ONLY)
+     (Dedicated Export/Import for: Expenses, Notes, & Vendors)
      ========================================================= -->
+<style>
+    /* بٹنز کی خوبصورت پٹی کا اسٹائل */
+    .modular-backup-bar {
+        display: none; /* صرف ایڈمن موڈ میں ظاہر ہوگا */
+        gap: 8px;
+        background: #ffffff;
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px dashed #cbd5e1;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        align-items: center;
+        justify-content: space-between;
+    }
+    .modular-backup-bar.admin-visible {
+        display: flex !important;
+    }
+    .mod-bkp-btn {
+        flex: 1;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 800;
+        font-size: 0.8rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: 0.2s;
+    }
+    .mod-bkp-btn:active { transform: scale(0.95); }
+    .mod-bkp-exp { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .mod-bkp-imp { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
+</style>
+
 <script>
 (function() {
 
-    // 1. تمام ضروری کیز کی فہرست (A to Z Keys List)
-    const ALL_APP_KEYS = [
-        'customProducts',
-        'customCategories',
-        'productStocks',
-        'salesData',
-        'orderHistory',
-        'deletedOrders',
-        'deletedProducts',
-        'deletedCategories',
-        'returnsHistory',
-        'headerInfo',
-        'themeSettings',
-        'buttonThemeSettings',
-        'appSettings',
-        'adminPassword',
-        'appStatus',
-        'userRewards',
-        'notificationSettings',
-        'customerPayments',
-        'customerPhones',
-        'customerCreditLimits',
-        'customerRecoveryDays',
-        'customerRewards',
-        'explicitCustomers',
-        'staffMembers',
-        'shopExpenses',          // روزانہ کے خرچے (Shop & Home)
-        'expenseCategories',     // خرچوں کی کیٹیگریز
-        'shopInvestments',       // بزنس انویسٹمنٹ
-        'suppliers',             // وینڈرز اور کمپنی کھاتہ + بلز
-        'purchaseHistory',       // مال کی خریداری کا ریکارڈ
-        'quotationHistory',      // تمام کوٹیشنز
-        'deals',                 // پیکجز اور ڈیلز
-        'heldOrders',            // روکے ہوئے آرڈرز (Hold)
-        'currentRegister',       // کیش دراز اور شفٹ
-        'registerHistory',       // بند شدہ شفٹوں کا ریکارڈ
-        'shopHolidays',          // چھٹیوں کا شیڈول
-        'proNotesDB_v2',         // 10 ٹیبز والے نوٹس
-        'shopNotes',             // پرانے نوٹس
-        'profilePicture',        // دکان کا لوگو / ڈی پی
-        'amtFeaturedPins',       // پن کیے گئے بٹنز
-        'reports_grid_layout',   // گرڈ سیٹنگز
-        'amt_hwid',              // ڈیوائس آئی ڈی
-        'amt_cycle'              // ایکٹیویشن سائیکل
-    ];
+    // یونیورسل فائل ڈاؤنلوڈر برائے ماڈیولر بیک اپ
+    function triggerJsonDownload(filename, dataObj) {
+        const jsonStr = JSON.stringify(dataObj, null, 2);
+        if (typeof window.downloadMedianFile === 'function') {
+            window.downloadMedianFile(filename, jsonStr, 'application/json');
+        } else {
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    }
 
     // =========================================================
-    // 2. 📤 EXPORT BACKUP FUNCTION (100% COMPLETE A TO Z)
+    // 1. 💸 EXPENSES & INVESTMENTS BACKUP (خرچے اور انویسٹمنٹ)
     // =========================================================
-    window.exportData = async function(event) {
-        const btn = (event && event.currentTarget) ? event.currentTarget : document.getElementById('export-backup-btn');
-        const originalContent = btn ? btn.innerHTML : '';
-        if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, true);
+    window.exportExpensesModular = function() {
+        if (!isAdmin) return alert("Admin Required!");
 
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        // مکمل ڈیٹا آبجیکٹ تیار کریں
-        const fullBackup = {
-            version: "2.0-ULTIMATE",
-            exportedAt: new Date().toISOString(),
-            shopName: (typeof headerInfo !== 'undefined' && headerInfo.title) ? headerInfo.title : "AMT_Shop",
-            data: {}
+        const payload = {
+            _type: "AMT_EXPENSES_MODULE_BACKUP",
+            _date: new Date().toISOString(),
+            shopExpenses: window.shopExpenses || JSON.parse(localStorage.getItem('shopExpenses')) || [],
+            shopInvestments: window.shopInvestments || JSON.parse(localStorage.getItem('shopInvestments')) || [],
+            expenseCategories: window.expenseCategories || JSON.parse(localStorage.getItem('expenseCategories')) || []
         };
 
-        ALL_APP_KEYS.forEach(key => {
-            const rawVal = localStorage.getItem(key);
-            if (rawVal !== null) {
-                try {
-                    fullBackup.data[key] = JSON.parse(rawVal);
-                } catch (e) {
-                    fullBackup.data[key] = rawVal; // اگر سٹرنگ ہو
-                }
-            }
-        });
-
-        const jsonString = JSON.stringify(fullBackup, null, 2);
-        const fileName = `AMT_Complete_Backup_${new Date().toISOString().split('T')[0]}.json`;
-
-        // محفوظ ڈاؤن لوڈ چلائیں (Median APK + تمام براؤزرز کے لیے محفوظ)
-        if (typeof window.downloadMedianFile === 'function') {
-            window.downloadMedianFile(fileName, jsonString, 'application/json');
-        } else {
-            try {
-                const blob = new Blob([jsonString], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                if (typeof showMessage === 'function') showMessage("A to Z Backup Exported Successfully!", "success");
-            } catch (err) {
-                alert("ڈاؤنلوڈ میں خرابی: فائل ٹیکسٹ موڈ میں محفوظ کی جا رہی ہے۔");
-            }
-        }
-
-        if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, false, originalContent);
+        const filename = `AMT_Expenses_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        triggerJsonDownload(filename, payload);
+        if (typeof showMessage === 'function') showMessage("تمام خرچوں کا بیک اپ ڈاؤنلوڈ ہو گیا!", "success");
     };
 
-    // =========================================================
-    // 3. 📥 IMPORT / RESTORE BACKUP FUNCTION (ALL DATA INCLUDED)
-    // =========================================================
-    window.importData = function(event) {
+    window.importExpensesModular = function(event) {
+        if (!isAdmin) return alert("Admin Required!");
         const file = event.target.files[0];
         if (!file) return;
 
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
-                const parsed = JSON.parse(e.target.result);
-                const backupPayload = parsed.data ? parsed.data : parsed; // پرانا فارمیٹ ہو یا نیا دونوں ہینڈل کرے گا
+                const data = JSON.parse(e.target.result);
+                if (data.shopExpenses || data._type === "AMT_EXPENSES_MODULE_BACKUP") {
+                    if (confirm("کیا آپ واقعی تمام خرچے اور انویسٹمنٹ اس فائل سے ری اسٹور کرنا چاہتے ہیں؟")) {
+                        if (data.shopExpenses) {
+                            window.shopExpenses = data.shopExpenses;
+                            localStorage.setItem('shopExpenses', JSON.stringify(data.shopExpenses));
+                        }
+                        if (data.shopInvestments) {
+                            window.shopInvestments = data.shopInvestments;
+                            localStorage.setItem('shopInvestments', JSON.stringify(data.shopInvestments));
+                        }
+                        if (data.expenseCategories) {
+                            window.expenseCategories = data.expenseCategories;
+                            localStorage.setItem('expenseCategories', JSON.stringify(data.expenseCategories));
+                        }
 
-                if (!confirm("⚠️ خبردار!\n\nکیا آپ واقعی یہ بیک اپ ری اسٹور کرنا چاہتے ہیں؟\nآپ کے تمام پرانے پروڈکٹس، کھاتہ، بل، اخراجات اور وینڈرز کا ڈیٹا اس نئے بیک اپ سے بدل دیا جائے گا۔")) {
-                    event.target.value = '';
-                    return;
-                }
-
-                let restoredCount = 0;
-                ALL_APP_KEYS.forEach(key => {
-                    if (backupPayload[key] !== undefined) {
-                        const val = typeof backupPayload[key] === 'string' ? backupPayload[key] : JSON.stringify(backupPayload[key]);
-                        localStorage.setItem(key, val);
-                        restoredCount++;
+                        if (typeof window.renderAllEI === 'function') window.renderAllEI();
+                        alert("✅ خرچوں کا ڈیٹا کامیابی سے بحال ہو گیا!");
                     }
-                });
-
-                // اگر کلاؤڈ سنک ہو تو فوراً کلاؤڈ پر بھیج دیں
-                if (typeof pushToCloud === 'function') {
-                    pushToCloud(true);
+                } else {
+                    alert("خرابی: یہ خرچوں کی بیک اپ فائل نہیں ہے۔");
                 }
-
-                alert(`✅ زبردست!\n\nپوری ایپ کا بیک اپ کامیابی سے ری اسٹور ہو گیا ہے۔ (${restoredCount} حصے بحال ہوئے)\nایپ خود بخود ری لوڈ ہو رہی ہے۔`);
-                setTimeout(() => window.location.reload(true), 800);
-
-            } catch (err) {
-                console.error("Restore Error:", err);
-                alert("بیک اپ فائل درست نہیں ہے یا فائل خراب ہو چکی ہے۔");
-            } finally {
-                event.target.value = '';
+            } catch(err) {
+                alert("فائل پڑھنے میں غلطی: " + err.message);
             }
         };
         reader.readAsText(file);
+        event.target.value = '';
     };
 
     // =========================================================
-    // 4. 🌐 CLOUD AUTO-SYNC OVERRIDE (FULL A TO Z SYNC)
+    // 2. 📝 NOTES BACKUP (10 ٹیبز کے نوٹس)
     // =========================================================
-    if (typeof window.pushToCloud === 'function') {
-        window.pushToCloud = async function(isAuto = false) {
-            const targetUid = typeof getTargetUid === 'function' ? getTargetUid() : null;
-            if (!targetUid || typeof firebase === 'undefined' || !firebase.database) return;
+    window.exportNotesModular = function() {
+        if (!isAdmin) return alert("Admin Required!");
 
-            const rtdb = firebase.database();
-            const timestamp = Date.now();
+        const payload = {
+            _type: "AMT_NOTES_MODULE_BACKUP",
+            _date: new Date().toISOString(),
+            proNotesDB_v2: window.proNotesDB || JSON.parse(localStorage.getItem('proNotesDB_v2')) || [],
+            shopNotes: localStorage.getItem('shopNotes') || ''
+        };
 
-            // فائر بیس پر پورا ڈیٹا پیک کر کے بھیجیں
-            const cloudPayload = { ts: timestamp };
-            ALL_APP_KEYS.forEach(key => {
-                cloudPayload[key] = localStorage.getItem(key) || '';
-            });
+        const filename = `AMT_Notes_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        triggerJsonDownload(filename, payload);
+        if (typeof showMessage === 'function') showMessage("نوٹس کا بیک اپ ڈاؤنلوڈ ہو گیا!", "success");
+    };
 
+    window.importNotesModular = function(event) {
+        if (!isAdmin) return alert("Admin Required!");
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
             try {
-                localStorage.setItem('cloud_last_ts', timestamp);
-                await rtdb.ref('stores/' + targetUid + '/completeData').set(cloudPayload);
-                if (typeof showCloudToast === 'function') {
-                    showCloudToast('success', isAuto ? 'Cloud Synced (All Data)' : 'Full Backup Saved to Cloud!');
+                const data = JSON.parse(e.target.result);
+                if (data.proNotesDB_v2 || data._type === "AMT_NOTES_MODULE_BACKUP") {
+                    if (confirm("کیا آپ تمام محفوظ شدہ نوٹس اس فائل سے بحال کرنا چاہتے ہیں؟")) {
+                        if (data.proNotesDB_v2) {
+                            window.proNotesDB = data.proNotesDB_v2;
+                            localStorage.setItem('proNotesDB_v2', JSON.stringify(data.proNotesDB_v2));
+                        }
+                        if (data.shopNotes) {
+                            localStorage.setItem('shopNotes', data.shopNotes);
+                        }
+
+                        if (typeof window.renderNotesTabsUI === 'function') window.renderNotesTabsUI();
+                        alert("✅ نوٹس کا ڈیٹا کامیابی سے بحال ہو گیا!");
+                    }
+                } else {
+                    alert("خرابی: یہ نوٹس کی بیک اپ فائل نہیں ہے۔");
                 }
-            } catch (e) {
-                console.error("Cloud push failed:", e);
-                if (typeof showCloudToast === 'function') showCloudToast('error', 'Cloud Sync Failed!');
+            } catch(err) {
+                alert("فائل پڑھنے میں غلطی: " + err.message);
             }
         };
-    }
+        reader.readAsText(file);
+        event.target.value = '';
+    };
 
-    if (typeof window.pullFromCloud === 'function') {
-        window.pullFromCloud = function() {
-            const targetUid = typeof getTargetUid === 'function' ? getTargetUid() : null;
-            if (!targetUid || typeof firebase === 'undefined' || !firebase.database) return;
+    // =========================================================
+    // 3. 🏢 VENDORS / COMPANIES BACKUP (کمپنی کھاتہ اور بلز)
+    // =========================================================
+    window.exportVendorsModular = function() {
+        if (!isAdmin) return alert("Admin Required!");
 
-            if (!confirm("⚠️ کلاؤڈ سے پورا ڈیٹا ڈاؤنلوڈ کریں؟ موجودہ ڈیٹا کلاؤڈ والے ڈیٹا سے بدل جائے گا۔")) return;
-
-            if (typeof showCloudToast === 'function') showCloudToast('loading', 'Downloading Full Database...');
-
-            const rtdb = firebase.database();
-            rtdb.ref('stores/' + targetUid + '/completeData').once('value').then(sn => {
-                if (sn.exists()) {
-                    const cloudData = sn.val();
-                    ALL_APP_KEYS.forEach(key => {
-                        if (cloudData[key] !== undefined && cloudData[key] !== '') {
-                            localStorage.setItem(key, cloudData[key]);
-                        }
-                    });
-                    localStorage.setItem('cloud_last_ts', cloudData.ts || Date.now());
-
-                    if (typeof showCloudToast === 'function') showCloudToast('success', 'Full Data Restored!');
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    if (typeof showCloudToast === 'function') showCloudToast('error', 'No cloud data found.');
-                }
-            }).catch(err => {
-                console.error("Cloud pull error:", err);
-                if (typeof showCloudToast === 'function') showCloudToast('error', 'Download Error!');
-            });
+        const payload = {
+            _type: "AMT_VENDORS_MODULE_BACKUP",
+            _date: new Date().toISOString(),
+            suppliers: window.vSuppliers || JSON.parse(localStorage.getItem('suppliers')) || {},
+            purchaseHistory: JSON.parse(localStorage.getItem('purchaseHistory')) || []
         };
+
+        const filename = `AMT_Vendors_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        triggerJsonDownload(filename, payload);
+        if (typeof showMessage === 'function') showMessage("کمپنیوں کے کھاتے کا بیک اپ ڈاؤنلوڈ ہو گیا!", "success");
+    };
+
+    window.importVendorsModular = function(event) {
+        if (!isAdmin) return alert("Admin Required!");
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (data.suppliers || data._type === "AMT_VENDORS_MODULE_BACKUP") {
+                    if (confirm("کیا آپ تمام کمپنیوں کے بل اور کھاتے اس فائل سے بحال کرنا چاہتے ہیں؟")) {
+                        if (data.suppliers) {
+                            window.vSuppliers = data.suppliers;
+                            localStorage.setItem('suppliers', JSON.stringify(data.suppliers));
+                        }
+                        if (data.purchaseHistory) {
+                            localStorage.setItem('purchaseHistory', JSON.stringify(data.purchaseHistory));
+                        }
+
+                        if (typeof window.vhRenderMainList === 'function') window.vhRenderMainList();
+                        alert("✅ کمپنیوں کا ریکارڈ اور کھاتہ کامیابی سے بحال ہو گیا!");
+                    }
+                } else {
+                    alert("خرابی: یہ کمپنیوں کی بیک اپ فائل نہیں ہے۔");
+                }
+            } catch(err) {
+                alert("فائل پڑھنے میں غلطی: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    };
+
+    // =========================================================
+    // 4. 🪟 INJECT UI BARS INTO MODALS (ONLY VISIBLE FOR ADMIN)
+    // =========================================================
+    function setupModularBars() {
+        const isAdminMode = (typeof isAdmin !== 'undefined' && isAdmin);
+
+        // A) Expenses Modal Bar
+        const expBody = document.getElementById('ei-modal-body');
+        if (expBody && !document.getElementById('bar-bkp-expenses')) {
+            const bar = document.createElement('div');
+            bar.id = 'bar-bkp-expenses';
+            bar.className = 'modular-backup-bar' + (isAdminMode ? ' admin-visible' : '');
+            bar.innerHTML = `
+                <span style="font-size:0.75rem; font-weight:800; color:#475569;"><i class="fas fa-database"></i> Expenses Backup:</span>
+                <button class="mod-bkp-btn mod-bkp-exp" onclick="window.exportExpensesModular()"><i class="fas fa-download"></i> Export</button>
+                <button class="mod-bkp-btn mod-bkp-imp" onclick="document.getElementById('file-inp-exp-bkp').click()"><i class="fas fa-upload"></i> Import</button>
+                <input type="file" id="file-inp-exp-bkp" accept=".json" style="display:none;" onchange="window.importExpensesModular(event)">
+            `;
+            expBody.insertBefore(bar, expBody.firstChild);
+        }
+
+        // B) Notes Modal Bar
+        const notesBody = document.querySelector('#notes-modal .modal-body');
+        if (notesBody && !document.getElementById('bar-bkp-notes')) {
+            const bar = document.createElement('div');
+            bar.id = 'bar-bkp-notes';
+            bar.className = 'modular-backup-bar' + (isAdminMode ? ' admin-visible' : '');
+            bar.innerHTML = `
+                <span style="font-size:0.75rem; font-weight:800; color:#475569;"><i class="fas fa-database"></i> Notes Backup:</span>
+                <button class="mod-bkp-btn mod-bkp-exp" onclick="window.exportNotesModular()"><i class="fas fa-download"></i> Export</button>
+                <button class="mod-bkp-btn mod-bkp-imp" onclick="document.getElementById('file-inp-notes-bkp').click()"><i class="fas fa-upload"></i> Import</button>
+                <input type="file" id="file-inp-notes-bkp" accept=".json" style="display:none;" onchange="window.importNotesModular(event)">
+            `;
+            notesBody.insertBefore(bar, notesBody.firstChild);
+        }
+
+        // C) Vendor Hub Modal Bar
+        const vhBody = document.getElementById('vh-main-body');
+        if (vhBody && !document.getElementById('bar-bkp-vendors')) {
+            const bar = document.createElement('div');
+            bar.id = 'bar-bkp-vendors';
+            bar.className = 'modular-backup-bar' + (isAdminMode ? ' admin-visible' : '');
+            bar.innerHTML = `
+                <span style="font-size:0.75rem; font-weight:800; color:#475569;"><i class="fas fa-database"></i> Companies Backup:</span>
+                <button class="mod-bkp-btn mod-bkp-exp" onclick="window.exportVendorsModular()"><i class="fas fa-download"></i> Export</button>
+                <button class="mod-bkp-btn mod-bkp-imp" onclick="document.getElementById('file-inp-vendors-bkp').click()"><i class="fas fa-upload"></i> Import</button>
+                <input type="file" id="file-inp-vendors-bkp" accept=".json" style="display:none;" onchange="window.importVendorsModular(event)">
+            `;
+            vhBody.insertBefore(bar, vhBody.firstChild);
+        }
+
+        // ایڈمن موڈ کے مطابق بارز کو دکھائیں یا چھپائیں
+        document.querySelectorAll('.modular-backup-bar').forEach(b => {
+            b.classList.toggle('admin-visible', isAdminMode);
+        });
     }
 
-    // ایونٹ لسنرز کو فوری بائنڈ کریں
-    setTimeout(() => {
-        const expBtn = document.getElementById('export-backup-btn');
-        if (expBtn) {
-            expBtn.onclick = function(e) {
-                e.preventDefault();
-                window.exportData(e);
-            };
-        }
-
-        const impInput = document.getElementById('import-file-input');
-        if (impInput) {
-            impInput.onchange = function(e) {
-                window.importData(e);
-            };
-        }
-    }, 1000);
+    // وقتاً فوقتاً چیک کریں تاکہ ایڈمن لاگ ان ہوتے ہی بار خود بخود ظاہر ہو جائے
+    setInterval(setupModularBars, 1500);
 
 })();
 </script>
 <!-- ========================================================= -->
+
   </body>
 </html>
