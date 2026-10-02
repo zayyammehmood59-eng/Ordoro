@@ -51909,93 +51909,119 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 <!-- ========================================================= -->
-
 <!-- =========================================================
-     📦 MEDIAN.CO / WEBVIEW BACKUP & SHARE API UNIVERSAL FIX
+     🚀 MEDIAN.CO NATIVE BACKUP & SHARE API FIX (APK COMPATIBLE)
      ========================================================= -->
-<style>
-    /* Median.co Universal Backup Dialog */
-    .median-backup-modal {
-        background: #ffffff !important;
-        border-radius: 24px !important;
-        padding: 22px !important;
-        max-width: 440px !important;
-        width: 90% !important;
-        box-shadow: 0 25px 60px rgba(0,0,0,0.3) !important;
-        text-align: center;
-    }
-    .median-backup-grid {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin: 18px 0 10px 0;
-    }
-    .median-bk-btn {
-        width: 100%;
-        padding: 14px 16px;
-        border-radius: 14px;
-        border: none;
-        font-weight: 800;
-        font-size: 0.95rem;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .median-bk-btn:active { transform: scale(0.96); }
-    .median-bk-dl { background: linear-gradient(135deg, #059669, #047857); color: white; box-shadow: 0 4px 14px rgba(5,150,105,0.3); }
-    .median-bk-wa { background: #25D366; color: white; box-shadow: 0 4px 14px rgba(37,211,102,0.3); }
-    .median-bk-copy { background: #e0f2fe; color: #0369a1; border: 1.5px solid #bae6fd; }
-</style>
-
 <script>
 (function() {
-    // 1. Median.co میں فائل ڈاؤنلوڈ کا سب سے بہترین طریقہ (Data URI + Octet-Stream)
-    function forceDownloadFile(filename, content, mimeType) {
-        try {
-            // Base64 encode for UTF-8 compatibility
-            var base64Data = btoa(unescape(encodeURIComponent(content)));
-            var dataUrl = 'data:' + (mimeType || 'application/octet-stream') + ';charset=utf-8;base64,' + base64Data;
-            
-            var a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = dataUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(function() { document.body.removeChild(a); }, 300);
-            return true;
-        } catch(e) {
-            console.error('Data URL download error:', e);
-            return false;
-        }
+    // 1. چیک کریں کہ کیا ایپ Median / GoNative WebView میں چل رہی ہے
+    function isMedianApp() {
+        return (typeof median !== 'undefined') || (typeof gonative !== 'undefined') || navigator.userAgent.includes('gonative') || navigator.userAgent.includes('median');
     }
 
-    // 2. بیک اپ کا جامع فنکشن (تمام فال بیکس کے ساتھ)
-    window.exportData = async function(event) {
-        var btn = event ? (event.currentTarget || event.target) : document.getElementById('export-backup-btn');
-        var originalContent = btn ? btn.innerHTML : '';
-        if (typeof setButtonLoading === 'function' && btn) setButtonLoading(btn, true);
+    // 2. محفوظ اور یونیورسل فائل ڈاؤن لوڈر (Android / Median Safe)
+    window.downloadMedianFile = function(fileName, textData, mimeType) {
+        mimeType = mimeType || 'application/json';
+        
+        // طریقہ A: اگر Median Native Download API موجود ہو
+        if (window.median && window.median.downloads && typeof window.median.downloads.downloadFile === 'function') {
+            try {
+                var base64Data = btoa(unescape(encodeURIComponent(textData)));
+                var dataUrl = 'data:' + mimeType + ';base64,' + base64Data;
+                window.median.downloads.downloadFile({ url: dataUrl, filename: fileName });
+                if (typeof showMessage === 'function') showMessage("Backup downloaded successfully!", "success");
+                return;
+            } catch(e) {
+                console.log("Median native download failed, trying dataURI fallback");
+            }
+        }
 
-        // سبسکرپشن اور لاگ ان چیک
+        // طریقہ B: Data URI Fallback (اینڈرائیڈ ویب ویو میں Blob سے 100 گنا بہتر کام کرتا ہے)
+        try {
+            var encodedData = 'data:' + mimeType + ';charset=utf-8,' + encodeURIComponent(textData);
+            var dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", encodedData);
+            dlAnchor.setAttribute("download", fileName);
+            dlAnchor.style.display = 'none';
+            document.body.appendChild(dlAnchor);
+            dlAnchor.click();
+            document.body.removeChild(dlAnchor);
+
+            if (typeof showMessage === 'function') showMessage("Backup downloaded successfully!", "success");
+        } catch (err) {
+            // طریقہ C: اگر سسٹم فائل مینیجر پھر بھی روکے تو بیک اپ کاپی کرنے کا پاپ اپ دیں
+            showBackupCopyModal(fileName, textData);
+        }
+    };
+
+    // 3. بیک اپ کاپی / ٹیکسٹ شیئر موڈل (اگر ڈیوائس فائل ڈاؤن لوڈ بلاک کرے)
+    function showBackupCopyModal(fileName, textData) {
+        var old = document.getElementById('median-backup-fallback-modal');
+        if (old) old.remove();
+
+        var modal = document.createElement('div');
+        modal.id = 'median-backup-fallback-modal';
+        modal.className = 'modal-overlay show';
+        modal.style.zIndex = '99999999';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 450px; background: #ffffff; border-radius: 20px; padding: 20px; text-align: center;">
+                <div style="width: 60px; height: 60px; background: #dcfce7; color: #16a34a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; margin: 0 auto 15px auto;">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h3 style="margin: 0 0 8px 0; color: #0f172a; font-weight: 800;">Manual Backup Safe-Box</h3>
+                <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 15px;">
+                    آپ کا فون سیکیورٹی کی وجہ سے براہ راست فائل محفوظ نہیں کر رہا۔ آپ پورا ڈیٹا کاپی کر کے WhatsApp یا نوٹس میں محفوظ کر سکتے ہیں۔
+                </p>
+                <textarea id="amt-backup-raw-text" readonly style="width: 100%; height: 120px; padding: 10px; font-family: monospace; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; resize: none; margin-bottom: 15px;">${textData}</textarea>
+                
+                <div style="display: flex; gap: 8px;">
+                    <button id="btn-copy-backup-text" style="flex: 1; padding: 12px; background: #06a541; color: white; border: none; border-radius: 12px; font-weight: 800; cursor: pointer;">
+                        <i class="fas fa-copy"></i> Copy Data
+                    </button>
+                    <button onclick="document.getElementById('median-backup-fallback-modal').remove()" style="padding: 12px 18px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 800; cursor: pointer;">
+                        Close
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('btn-copy-backup-text').addEventListener('click', function() {
+            var copyBox = document.getElementById('amt-backup-raw-text');
+            copyBox.select();
+            document.execCommand('copy');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textData);
+            }
+            if (typeof showMessage === 'function') showMessage("Backup Copied to Clipboard!", "success");
+            this.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        });
+    }
+
+    // 4. اصلی EXPORT DATA فنکشن کو Median-Safe بنانا
+    window.exportData = async function(event) {
+        var btn = (event && event.currentTarget) ? event.currentTarget : document.getElementById('export-backup-btn');
+        var originalContent = btn ? btn.innerHTML : '';
+        if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, true);
+
+        await new Promise(function(resolve) { setTimeout(resolve, 300); });
+
         var now = Date.now();
         var isPaidPlan = (typeof appStatus !== 'undefined') && (appStatus.isActivated || (appStatus.expiryDate && now < appStatus.expiryDate));
         var isTrialPlan = (typeof appStatus !== 'undefined') && (appStatus.trialEndDate && now < appStatus.trialEndDate);
 
         if (isTrialPlan && !isPaidPlan) {
-            if (typeof setButtonLoading === 'function' && btn) setButtonLoading(btn, false, originalContent);
-            return showMessage ? showMessage('Data backup is a premium feature.', 'error') : alert('Backup is a premium feature.');
+            if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, false, originalContent);
+            return (typeof showMessage === 'function') ? showMessage('Data backup is a premium feature.', 'error') : alert('Premium required');
         }
 
         if (typeof hasAdminAccess === 'function' && !hasAdminAccess()) {
-            if (typeof setButtonLoading === 'function' && btn) setButtonLoading(btn, false, originalContent);
-            return showMessage ? showMessage('This is a premium feature. Please activate to use.', 'error') : alert('Access denied.');
+            if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, false, originalContent);
+            return (typeof showMessage === 'function') ? showMessage("Admin Access Required", "error") : alert("Admin Required");
         }
 
         // تمام لوکل ڈیٹا اکٹھا کریں
-        var backupObj = {
+        var backupPayload = {
             customProducts: window.customProducts || {},
             customCategories: window.customCategories || {},
             productStocks: window.productStocks || {},
@@ -52007,7 +52033,7 @@ document.addEventListener('DOMContentLoaded', () => {
             themeSettings: window.themeSettings || {},
             buttonThemeSettings: window.buttonThemeSettings || {},
             appSettings: window.appSettings || { currency: 'PKR', language: 'en' },
-            adminPassword: window.adminPassword || 'almehmood733',
+            adminPassword: window.adminPassword || "almehmood733",
             appStatus: window.appStatus || {},
             notificationSettings: window.notificationSettings || {},
             customerPayments: window.customerPayments || {},
@@ -52015,132 +52041,53 @@ document.addEventListener('DOMContentLoaded', () => {
             userRewards: window.userRewards || {},
             productSalesIndex: window.productSalesIndex || {},
             staffMembers: window.staffMembers || {},
-            backupDate: new Date().toISOString()
+            shopExpenses: window.shopExpenses || [],
+            shopInvestments: window.shopInvestments || []
         };
 
-        var jsonString = JSON.stringify(backupObj);
-        var filename = 'AMT_Backup_' + new Date().toISOString().split('T')[0] + '.json';
+        var backupJsonString = JSON.stringify(backupPayload, null, 2);
+        var filename = `AMT_Backup_${new Date().toISOString().split('T')[0]}.json`;
 
-        if (typeof setButtonLoading === 'function' && btn) setButtonLoading(btn, false, originalContent);
+        // ڈاونلوڈ چلائیں
+        window.downloadMedianFile(filename, backupJsonString, 'application/json');
 
-        // 3. خوبصورت اور محفوظ ڈائیلاگ شو کریں تاکہ Median.co میں ایرر نہ آئے
-        var existingModal = document.getElementById('median-backup-prompt-modal');
-        if (existingModal) existingModal.remove();
+        if (btn && typeof setButtonLoading === 'function') setButtonLoading(btn, false, originalContent);
+    };
 
-        var modal = document.createElement('div');
-        modal.id = 'median-backup-prompt-modal';
-        modal.className = 'modal-overlay show';
-        modal.style.zIndex = '9999999';
-        modal.innerHTML = `
-            <div class="modal-content median-backup-modal">
-                <div style="width:65px; height:65px; background:#dcfce7; color:#059669; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto 12px auto;">
-                    <i class="fas fa-shield-alt"></i>
-                </div>
-                <h3 style="color:#0f172a; margin:0 0 6px 0; font-size:1.3rem; font-weight:900;">Data Backup Ready</h3>
-                <p style="font-size:0.85rem; color:#64748b; margin:0 0 15px 0;">آپ کا سارا ڈیٹا تیار ہے۔ اپنے لیے موزوں آپشن منتخب کریں:</p>
-                
-                <div class="median-backup-grid">
-                    <!-- Option 1: File Download (Octet-stream for APK) -->
-                    <button class="median-bk-btn median-bk-dl" id="btn-median-direct-dl">
-                        <i class="fas fa-download"></i> Download Backup File
-                    </button>
-                    <!-- Option 2: WhatsApp Share (Web/Native safe) -->
-                    <button class="median-bk-btn median-bk-wa" id="btn-median-wa-send">
-                        <i class="fab fa-whatsapp" style="font-size:1.2rem;"></i> Share on WhatsApp
-                    </button>
-                    <!-- Option 3: Copy Backup Text -->
-                    <button class="median-bk-btn median-bk-copy" id="btn-median-copy-data">
-                        <i class="fas fa-copy"></i> Copy Backup Text
-                    </button>
-                </div>
-                
-                <button class="modal-button cancel" onclick="document.getElementById('median-backup-prompt-modal').remove()" style="width:100%; margin-top:8px; background:#f1f5f9; color:#475569; font-weight:800; border-radius:12px; border:none; padding:12px;">Close</button>
-            </div>
-        `;
-        document.body.appendChild(modal);
+    // 5. یونیورسل Native Share Fix (جو Median اور عام براؤزر دونوں میں چلے)
+    var originalNavigatorShare = navigator.share ? navigator.share.bind(navigator) : null;
+    
+    window.universalShare = function(shareObj) {
+        var textToSend = (shareObj.title ? '*' + shareObj.title + '*\n\n' : '') + (shareObj.text || '') + (shareObj.url ? '\n' + shareObj.url : '');
 
-        // Click Actions
-        document.getElementById('btn-median-direct-dl').addEventListener('click', function() {
-            var ok = forceDownloadFile(filename, jsonString, 'application/octet-stream');
-            if (ok) {
-                if (typeof showMessage === 'function') showMessage('File download started!', 'success');
-            } else {
-                alert('براہ کرم WhatsApp یا Copy آپشن استعمال کریں۔');
-            }
-        });
-
-        document.getElementById('btn-median-wa-send').addEventListener('click', async function() {
-            // پہلے فائل شیئر کی کوشش کریں
+        // اگر Median App کا اپنا share موجود ہو
+        if (window.median && window.median.share && typeof window.median.share.sharePage === 'function') {
             try {
-                var file = new File([jsonString], filename, { type: 'application/json' });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        title: 'Al Mehmood Trader Backup',
-                        text: 'Al Mehmood Trader Backup File - ' + new Date().toLocaleDateString(),
-                        files: [file]
-                    });
-                    modal.remove();
-                    return;
-                }
+                window.median.share.sharePage({ text: textToSend });
+                return Promise.resolve();
             } catch(e) {}
+        }
 
-            // فال بیک: WhatsApp اوپن کریں
-            var waMsg = `*🔒 AL MEHMOOD TRADER - DATA BACKUP*\n_Date: ${new Date().toLocaleString()}_\nBackup successfully generated for shop data.`;
-            window.open('https://wa.me/?text=' + encodeURIComponent(waMsg), '_blank');
-            modal.remove();
-        });
+        // اگر سسٹم کا عام navigator.share چلے (صرف ٹیکسٹ کے لیے محفوظ)
+        if (originalNavigatorShare && !shareObj.files) {
+            return originalNavigatorShare({ title: shareObj.title, text: shareObj.text, url: shareObj.url }).catch(function(){});
+        }
 
-        document.getElementById('btn-median-copy-data').addEventListener('click', function() {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(jsonString).then(function() {
-                    if (typeof showMessage === 'function') showMessage('Backup data copied to clipboard!', 'success');
-                    else alert('Data copied to clipboard!');
-                    modal.remove();
-                });
-            } else {
-                var ta = document.createElement('textarea');
-                ta.value = jsonString;
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-                if (typeof showMessage === 'function') showMessage('Backup data copied!', 'success');
-                else alert('Copied!');
-                modal.remove();
-            }
-        });
+        // Fallback: سیدھا واٹس ایپ کھولیں یا کلپ بورڈ کاپی کریں
+        var waUrl = `https://wa.me/?text=${encodeURIComponent(textToSend)}`;
+        window.open(waUrl, '_blank');
+        return Promise.resolve();
     };
 
-    // 4. универсальный Share Handler (Share API فیل ہونے پر خاموشی سے WhatsApp پر بھیج دے گا)
-    window.safeShareOrWhatsApp = async function(title, text, files) {
-        if (navigator.share) {
-            try {
-                var shareObj = { title: title, text: text };
-                if (files && files.length && navigator.canShare && navigator.canShare({ files: files })) {
-                    shareObj.files = files;
-                }
-                await navigator.share(shareObj);
-                return true;
-            } catch (err) {
-                if (err.name === 'AbortError') return true; // User cancelled
-            }
-        }
-        // اگر براؤزر شیئر سپورٹ نہ کرے تو واٹس ایپ کھولیں
-        window.open('https://wa.me/?text=' + encodeURIComponent(text || title), '_blank');
-        return false;
-    };
-
-    // 5. تمام WhatsApp اور Export بٹن پر دوبارہ اس کو محفوظ طریقے سے بائنڈ کریں
-    setTimeout(function() {
-        var exportBtn = document.getElementById('export-backup-btn');
-        if (exportBtn) {
-            var newExportBtn = exportBtn.cloneNode(true);
-            exportBtn.parentNode.replaceChild(newExportBtn, exportBtn);
-            newExportBtn.addEventListener('click', window.exportData);
-        }
-    }, 1200);
+    // ایونٹ لسنر ری-بائنڈ کریں
+    var expBtn = document.getElementById('export-backup-btn');
+    if (expBtn) {
+        expBtn.onclick = function(e) {
+            e.preventDefault();
+            window.exportData(e);
+        };
+    }
 })();
 </script>
-<!-- ========================================================= -->
   </body>
 </html>
