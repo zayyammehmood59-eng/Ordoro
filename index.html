@@ -52149,35 +52149,34 @@ document.addEventListener('DOMContentLoaded', () => {
     window.loginAsOwnerGoogle = window.loginAsOwner;
 })();
 </script>
-
 <!-- =========================================================
-     💎 MODULAR INDEPENDENT BACKUP & RESTORE SYSTEM (ADMIN ONLY)
-     (Dedicated Export/Import for: Expenses, Notes, & Vendors)
+     📋 MODULAR SMART COPY & PASTE BACKUP SYSTEM (ADMIN ONLY)
+     (Works 100% across all devices & app clones without files)
      ========================================================= -->
 <style>
-    /* بٹنز کی خوبصورت پٹی کا اسٹائل */
-    .modular-backup-bar {
-        display: none; /* صرف ایڈمن موڈ میں ظاہر ہوگا */
+    /* ایڈمن بار کا ڈیزائن */
+    .mod-copypaste-bar {
+        display: none; /* صرف ایڈمن موڈ میں نظر آئے گا */
         gap: 8px;
         background: #ffffff;
         padding: 10px 14px;
-        border-radius: 12px;
-        border: 1px dashed #cbd5e1;
+        border-radius: 14px;
+        border: 1.5px dashed #cbd5e1;
         margin-bottom: 15px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.02);
         align-items: center;
         justify-content: space-between;
     }
-    .modular-backup-bar.admin-visible {
+    .mod-copypaste-bar.admin-active {
         display: flex !important;
     }
-    .mod-bkp-btn {
+    .mod-cp-btn {
         flex: 1;
-        padding: 8px 12px;
-        border-radius: 8px;
+        padding: 9px 12px;
+        border-radius: 10px;
         border: none;
         font-weight: 800;
-        font-size: 0.8rem;
+        font-size: 0.82rem;
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -52185,250 +52184,273 @@ document.addEventListener('DOMContentLoaded', () => {
         gap: 6px;
         transition: 0.2s;
     }
-    .mod-bkp-btn:active { transform: scale(0.95); }
-    .mod-bkp-exp { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-    .mod-bkp-imp { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
+    .mod-cp-btn:active { transform: scale(0.95); }
+    .mod-cp-copy { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .mod-cp-paste { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
+
+    /* پیسٹ کرنے کے لیے پاپ اپ ونڈو کا ڈیزائن */
+    #cp-paste-modal-overlay {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px);
+        display: none; align-items: center; justify-content: center;
+        z-index: 99999999; padding: 20px;
+    }
+    #cp-paste-modal-overlay.show { display: flex !important; }
+    .cp-paste-box {
+        background: white; border-radius: 20px; width: 100%; max-width: 420px;
+        padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); text-align: center;
+    }
+    .cp-textarea {
+        width: 100%; height: 140px; padding: 12px; border-radius: 12px;
+        border: 2px solid #cbd5e1; font-family: monospace; font-size: 0.8rem;
+        outline: none; resize: none; background: #f8fafc; margin: 15px 0;
+    }
+    .cp-textarea:focus { border-color: #06a541; background: white; }
 </style>
+
+<!-- گلوبل پیسٹ موڈل (Data Paste Window) -->
+<div id="cp-paste-modal-overlay">
+    <div class="cp-paste-box">
+        <div style="width: 50px; height: 50px; background: #e0f2fe; color: #0284c7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 1.5rem;">
+            <i class="fas fa-paste"></i>
+        </div>
+        <h3 id="cp-paste-title" style="margin: 0; color: #0f172a; font-size: 1.2rem;">Paste Backup Data</h3>
+        <p style="margin: 5px 0 0; font-size: 0.8rem; color: #64748b;">کاپی کیا ہوا کوڈ نیچے والے باکس میں پیسٹ کریں:</p>
+        
+        <textarea id="cp-paste-input" class="cp-textarea" placeholder="یہاں کوڈ پیسٹ کریں..."></textarea>
+        
+        <div style="display: flex; gap: 10px;">
+            <button onclick="document.getElementById('cp-paste-modal-overlay').classList.remove('show')" style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 10px; font-weight: 800; cursor: pointer;">Cancel</button>
+            <button id="cp-submit-paste-btn" style="flex: 2; padding: 12px; background: #06a541; color: white; border: none; border-radius: 10px; font-weight: 800; cursor: pointer;">Restore Data</button>
+        </div>
+    </div>
+</div>
 
 <script>
 (function() {
 
-    // یونیورسل فائل ڈاؤنلوڈر برائے ماڈیولر بیک اپ
-    function triggerJsonDownload(filename, dataObj) {
-        const jsonStr = JSON.stringify(dataObj, null, 2);
-        if (typeof window.downloadMedianFile === 'function') {
-            window.downloadMedianFile(filename, jsonStr, 'application/json');
+    // کلپ بورڈ پر محفوظ طریقے سے کاپی کرنے کا فنکشن
+    function copyTextToClipboard(text, successMsg) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert("✅ " + successMsg);
+            }).catch(() => fallbackCopy(text, successMsg));
         } else {
-            const blob = new Blob([jsonStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            fallbackCopy(text, successMsg);
         }
     }
 
+    function fallbackCopy(text, successMsg) {
+        const tempInput = document.createElement("textarea");
+        tempInput.value = text;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempInput);
+        alert("✅ " + successMsg);
+    }
+
+    let activeRestoreType = null;
+
     // =========================================================
-    // 1. 💸 EXPENSES & INVESTMENTS BACKUP (خرچے اور انویسٹمنٹ)
+    // 1. 💸 EXPENSES COPY / PASTE (خرچے)
     // =========================================================
-    window.exportExpensesModular = function() {
+    window.copyExpensesData = function() {
         if (!isAdmin) return alert("Admin Required!");
 
-        const payload = {
-            _type: "AMT_EXPENSES_MODULE_BACKUP",
-            _date: new Date().toISOString(),
+        const data = {
+            _type: "AMT_EXPENSES_DATA",
             shopExpenses: window.shopExpenses || JSON.parse(localStorage.getItem('shopExpenses')) || [],
             shopInvestments: window.shopInvestments || JSON.parse(localStorage.getItem('shopInvestments')) || [],
             expenseCategories: window.expenseCategories || JSON.parse(localStorage.getItem('expenseCategories')) || []
         };
 
-        const filename = `AMT_Expenses_Backup_${new Date().toISOString().split('T')[0]}.json`;
-        triggerJsonDownload(filename, payload);
-        if (typeof showMessage === 'function') showMessage("تمام خرچوں کا بیک اپ ڈاؤنلوڈ ہو گیا!", "success");
+        const jsonStr = JSON.stringify(data);
+        copyTextToClipboard(jsonStr, "تمام خرچوں کا ڈیٹا کاپی ہو گیا ہے! اب دوسری ایپ میں جا کر پیسٹ کریں۔");
     };
 
-    window.importExpensesModular = function(event) {
+    window.openPasteExpenses = function() {
         if (!isAdmin) return alert("Admin Required!");
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const data = JSON.parse(e.target.result);
-                if (data.shopExpenses || data._type === "AMT_EXPENSES_MODULE_BACKUP") {
-                    if (confirm("کیا آپ واقعی تمام خرچے اور انویسٹمنٹ اس فائل سے ری اسٹور کرنا چاہتے ہیں؟")) {
-                        if (data.shopExpenses) {
-                            window.shopExpenses = data.shopExpenses;
-                            localStorage.setItem('shopExpenses', JSON.stringify(data.shopExpenses));
-                        }
-                        if (data.shopInvestments) {
-                            window.shopInvestments = data.shopInvestments;
-                            localStorage.setItem('shopInvestments', JSON.stringify(data.shopInvestments));
-                        }
-                        if (data.expenseCategories) {
-                            window.expenseCategories = data.expenseCategories;
-                            localStorage.setItem('expenseCategories', JSON.stringify(data.expenseCategories));
-                        }
-
-                        if (typeof window.renderAllEI === 'function') window.renderAllEI();
-                        alert("✅ خرچوں کا ڈیٹا کامیابی سے بحال ہو گیا!");
-                    }
-                } else {
-                    alert("خرابی: یہ خرچوں کی بیک اپ فائل نہیں ہے۔");
-                }
-            } catch(err) {
-                alert("فائل پڑھنے میں غلطی: " + err.message);
-            }
-        };
-        reader.readAsText(file);
-        event.target.value = '';
+        activeRestoreType = "expenses";
+        document.getElementById('cp-paste-title').innerText = "Restore Expenses Data";
+        document.getElementById('cp-paste-input').value = "";
+        document.getElementById('cp-paste-modal-overlay').classList.add('show');
     };
 
     // =========================================================
-    // 2. 📝 NOTES BACKUP (10 ٹیبز کے نوٹس)
+    // 2. 📝 NOTES COPY / PASTE (10 ٹیبز کے نوٹس)
     // =========================================================
-    window.exportNotesModular = function() {
+    window.copyNotesData = function() {
         if (!isAdmin) return alert("Admin Required!");
 
-        const payload = {
-            _type: "AMT_NOTES_MODULE_BACKUP",
-            _date: new Date().toISOString(),
+        const data = {
+            _type: "AMT_NOTES_DATA",
             proNotesDB_v2: window.proNotesDB || JSON.parse(localStorage.getItem('proNotesDB_v2')) || [],
             shopNotes: localStorage.getItem('shopNotes') || ''
         };
 
-        const filename = `AMT_Notes_Backup_${new Date().toISOString().split('T')[0]}.json`;
-        triggerJsonDownload(filename, payload);
-        if (typeof showMessage === 'function') showMessage("نوٹس کا بیک اپ ڈاؤنلوڈ ہو گیا!", "success");
+        const jsonStr = JSON.stringify(data);
+        copyTextToClipboard(jsonStr, "نوٹس کا تمام ڈیٹا کاپی ہو گیا ہے! اب دوسری ایپ میں جا کر پیسٹ کریں۔");
     };
 
-    window.importNotesModular = function(event) {
+    window.openPasteNotes = function() {
         if (!isAdmin) return alert("Admin Required!");
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const data = JSON.parse(e.target.result);
-                if (data.proNotesDB_v2 || data._type === "AMT_NOTES_MODULE_BACKUP") {
-                    if (confirm("کیا آپ تمام محفوظ شدہ نوٹس اس فائل سے بحال کرنا چاہتے ہیں؟")) {
-                        if (data.proNotesDB_v2) {
-                            window.proNotesDB = data.proNotesDB_v2;
-                            localStorage.setItem('proNotesDB_v2', JSON.stringify(data.proNotesDB_v2));
-                        }
-                        if (data.shopNotes) {
-                            localStorage.setItem('shopNotes', data.shopNotes);
-                        }
-
-                        if (typeof window.renderNotesTabsUI === 'function') window.renderNotesTabsUI();
-                        alert("✅ نوٹس کا ڈیٹا کامیابی سے بحال ہو گیا!");
-                    }
-                } else {
-                    alert("خرابی: یہ نوٹس کی بیک اپ فائل نہیں ہے۔");
-                }
-            } catch(err) {
-                alert("فائل پڑھنے میں غلطی: " + err.message);
-            }
-        };
-        reader.readAsText(file);
-        event.target.value = '';
+        activeRestoreType = "notes";
+        document.getElementById('cp-paste-title').innerText = "Restore Notes Data";
+        document.getElementById('cp-paste-input').value = "";
+        document.getElementById('cp-paste-modal-overlay').classList.add('show');
     };
 
     // =========================================================
-    // 3. 🏢 VENDORS / COMPANIES BACKUP (کمپنی کھاتہ اور بلز)
+    // 3. 🏢 COMPANIES / VENDORS COPY / PASTE (کمپنی کھاتہ اور بل)
     // =========================================================
-    window.exportVendorsModular = function() {
+    window.copyVendorsData = function() {
         if (!isAdmin) return alert("Admin Required!");
 
-        const payload = {
-            _type: "AMT_VENDORS_MODULE_BACKUP",
-            _date: new Date().toISOString(),
+        const data = {
+            _type: "AMT_VENDORS_DATA",
             suppliers: window.vSuppliers || JSON.parse(localStorage.getItem('suppliers')) || {},
             purchaseHistory: JSON.parse(localStorage.getItem('purchaseHistory')) || []
         };
 
-        const filename = `AMT_Vendors_Backup_${new Date().toISOString().split('T')[0]}.json`;
-        triggerJsonDownload(filename, payload);
-        if (typeof showMessage === 'function') showMessage("کمپنیوں کے کھاتے کا بیک اپ ڈاؤنلوڈ ہو گیا!", "success");
+        const jsonStr = JSON.stringify(data);
+        copyTextToClipboard(jsonStr, "کمپنیوں کے تمام کھاتوں کا ڈیٹا کاپی ہو گیا ہے!");
     };
 
-    window.importVendorsModular = function(event) {
+    window.openPasteVendors = function() {
         if (!isAdmin) return alert("Admin Required!");
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const data = JSON.parse(e.target.result);
-                if (data.suppliers || data._type === "AMT_VENDORS_MODULE_BACKUP") {
-                    if (confirm("کیا آپ تمام کمپنیوں کے بل اور کھاتے اس فائل سے بحال کرنا چاہتے ہیں؟")) {
-                        if (data.suppliers) {
-                            window.vSuppliers = data.suppliers;
-                            localStorage.setItem('suppliers', JSON.stringify(data.suppliers));
-                        }
-                        if (data.purchaseHistory) {
-                            localStorage.setItem('purchaseHistory', JSON.stringify(data.purchaseHistory));
-                        }
-
-                        if (typeof window.vhRenderMainList === 'function') window.vhRenderMainList();
-                        alert("✅ کمپنیوں کا ریکارڈ اور کھاتہ کامیابی سے بحال ہو گیا!");
-                    }
-                } else {
-                    alert("خرابی: یہ کمپنیوں کی بیک اپ فائل نہیں ہے۔");
-                }
-            } catch(err) {
-                alert("فائل پڑھنے میں غلطی: " + err.message);
-            }
-        };
-        reader.readAsText(file);
-        event.target.value = '';
+        activeRestoreType = "vendors";
+        document.getElementById('cp-paste-title').innerText = "Restore Companies Data";
+        document.getElementById('cp-paste-input').value = "";
+        document.getElementById('cp-paste-modal-overlay').classList.add('show');
     };
 
     // =========================================================
-    // 4. 🪟 INJECT UI BARS INTO MODALS (ONLY VISIBLE FOR ADMIN)
+    // 📥 RESTORE SUBMISSION ENGINE (ڈیٹا لوڈ کرنے کا طریقہ کار)
     // =========================================================
-    function setupModularBars() {
+    document.getElementById('cp-submit-paste-btn').addEventListener('click', function() {
+        const rawText = document.getElementById('cp-paste-input').value.trim();
+        if (!rawText) return alert("براہ کرم پہلے کوڈ پیسٹ کریں!");
+
+        try {
+            const data = JSON.parse(rawText);
+
+            // A) خرچوں کی بحالی
+            if (activeRestoreType === "expenses") {
+                if (!data.shopExpenses && data._type !== "AMT_EXPENSES_DATA") {
+                    return alert("❌ غلط ڈیٹا! یہ خرچوں کا بیک اپ کوڈ نہیں ہے۔");
+                }
+                if (data.shopExpenses) {
+                    window.shopExpenses = data.shopExpenses;
+                    localStorage.setItem('shopExpenses', JSON.stringify(data.shopExpenses));
+                }
+                if (data.shopInvestments) {
+                    window.shopInvestments = data.shopInvestments;
+                    localStorage.setItem('shopInvestments', JSON.stringify(data.shopInvestments));
+                }
+                if (data.expenseCategories) {
+                    window.expenseCategories = data.expenseCategories;
+                    localStorage.setItem('expenseCategories', JSON.stringify(data.expenseCategories));
+                }
+                if (typeof window.renderAllEI === 'function') window.renderAllEI();
+                alert("✅ تمام خرچے کامیابی سے بحال ہو گئے ہیں!");
+            }
+
+            // B) نوٹس کی بحالی
+            else if (activeRestoreType === "notes") {
+                if (!data.proNotesDB_v2 && data._type !== "AMT_NOTES_DATA") {
+                    return alert("❌ غلط ڈیٹا! یہ نوٹس کا بیک اپ کوڈ نہیں ہے۔");
+                }
+                if (data.proNotesDB_v2) {
+                    window.proNotesDB = data.proNotesDB_v2;
+                    localStorage.setItem('proNotesDB_v2', JSON.stringify(data.proNotesDB_v2));
+                }
+                if (data.shopNotes) {
+                    localStorage.setItem('shopNotes', data.shopNotes);
+                }
+                if (typeof window.renderNotesTabsUI === 'function') window.renderNotesTabsUI();
+                alert("✅ تمام نوٹس کامیابی سے بحال ہو گئے ہیں!");
+            }
+
+            // C) کمپنیوں اور وینڈرز کی بحالی
+            else if (activeRestoreType === "vendors") {
+                if (!data.suppliers && data._type !== "AMT_VENDORS_DATA") {
+                    return alert("❌ غلط ڈیٹا! یہ کمپنیوں کا بیک اپ کوڈ نہیں ہے۔");
+                }
+                if (data.suppliers) {
+                    window.vSuppliers = data.suppliers;
+                    localStorage.setItem('suppliers', JSON.stringify(data.suppliers));
+                }
+                if (data.purchaseHistory) {
+                    localStorage.setItem('purchaseHistory', JSON.stringify(data.purchaseHistory));
+                }
+                if (typeof window.vhRenderMainList === 'function') window.vhRenderMainList();
+                alert("✅ تمام کمپنیوں کا ریکارڈ اور کھاتہ کامیابی سے بحال ہو گیا!");
+            }
+
+            document.getElementById('cp-paste-modal-overlay').classList.remove('show');
+
+        } catch (err) {
+            alert("❌ کوڈ پڑھنے میں ناکامی: براہ کرم پورا کوڈ کاپی کر کے پیسٹ کریں۔");
+        }
+    });
+
+    // =========================================================
+    // 🪟 INJECT COPY / PASTE BARS INTO ALL 3 MODALS
+    // =========================================================
+    function injectCopyPasteBars() {
         const isAdminMode = (typeof isAdmin !== 'undefined' && isAdmin);
 
-        // A) Expenses Modal Bar
+        // 1. Expenses Bar
         const expBody = document.getElementById('ei-modal-body');
-        if (expBody && !document.getElementById('bar-bkp-expenses')) {
+        if (expBody && !document.getElementById('bar-cp-expenses')) {
             const bar = document.createElement('div');
-            bar.id = 'bar-bkp-expenses';
-            bar.className = 'modular-backup-bar' + (isAdminMode ? ' admin-visible' : '');
+            bar.id = 'bar-cp-expenses';
+            bar.className = 'mod-copypaste-bar' + (isAdminMode ? ' admin-active' : '');
             bar.innerHTML = `
-                <span style="font-size:0.75rem; font-weight:800; color:#475569;"><i class="fas fa-database"></i> Expenses Backup:</span>
-                <button class="mod-bkp-btn mod-bkp-exp" onclick="window.exportExpensesModular()"><i class="fas fa-download"></i> Export</button>
-                <button class="mod-bkp-btn mod-bkp-imp" onclick="document.getElementById('file-inp-exp-bkp').click()"><i class="fas fa-upload"></i> Import</button>
-                <input type="file" id="file-inp-exp-bkp" accept=".json" style="display:none;" onchange="window.importExpensesModular(event)">
+                <span style="font-size:0.8rem; font-weight:800; color:#475569;"><i class="fas fa-wallet"></i> Expenses Transfer:</span>
+                <button class="mod-cp-btn mod-cp-copy" onclick="window.copyExpensesData()"><i class="fas fa-copy"></i> Copy Data</button>
+                <button class="mod-cp-btn mod-cp-paste" onclick="window.openPasteExpenses()"><i class="fas fa-paste"></i> Paste & Restore</button>
             `;
             expBody.insertBefore(bar, expBody.firstChild);
         }
 
-        // B) Notes Modal Bar
+        // 2. Notes Bar
         const notesBody = document.querySelector('#notes-modal .modal-body');
-        if (notesBody && !document.getElementById('bar-bkp-notes')) {
+        if (notesBody && !document.getElementById('bar-cp-notes')) {
             const bar = document.createElement('div');
-            bar.id = 'bar-bkp-notes';
-            bar.className = 'modular-backup-bar' + (isAdminMode ? ' admin-visible' : '');
+            bar.id = 'bar-cp-notes';
+            bar.className = 'mod-copypaste-bar' + (isAdminMode ? ' admin-active' : '');
             bar.innerHTML = `
-                <span style="font-size:0.75rem; font-weight:800; color:#475569;"><i class="fas fa-database"></i> Notes Backup:</span>
-                <button class="mod-bkp-btn mod-bkp-exp" onclick="window.exportNotesModular()"><i class="fas fa-download"></i> Export</button>
-                <button class="mod-bkp-btn mod-bkp-imp" onclick="document.getElementById('file-inp-notes-bkp').click()"><i class="fas fa-upload"></i> Import</button>
-                <input type="file" id="file-inp-notes-bkp" accept=".json" style="display:none;" onchange="window.importNotesModular(event)">
+                <span style="font-size:0.8rem; font-weight:800; color:#475569;"><i class="fas fa-sticky-note"></i> Notes Transfer:</span>
+                <button class="mod-cp-btn mod-cp-copy" onclick="window.copyNotesData()"><i class="fas fa-copy"></i> Copy Data</button>
+                <button class="mod-cp-btn mod-cp-paste" onclick="window.openPasteNotes()"><i class="fas fa-paste"></i> Paste & Restore</button>
             `;
             notesBody.insertBefore(bar, notesBody.firstChild);
         }
 
-        // C) Vendor Hub Modal Bar
+        // 3. Vendor Hub Bar
         const vhBody = document.getElementById('vh-main-body');
-        if (vhBody && !document.getElementById('bar-bkp-vendors')) {
+        if (vhBody && !document.getElementById('bar-cp-vendors')) {
             const bar = document.createElement('div');
-            bar.id = 'bar-bkp-vendors';
-            bar.className = 'modular-backup-bar' + (isAdminMode ? ' admin-visible' : '');
+            bar.id = 'bar-cp-vendors';
+            bar.className = 'mod-copypaste-bar' + (isAdminMode ? ' admin-active' : '');
             bar.innerHTML = `
-                <span style="font-size:0.75rem; font-weight:800; color:#475569;"><i class="fas fa-database"></i> Companies Backup:</span>
-                <button class="mod-bkp-btn mod-bkp-exp" onclick="window.exportVendorsModular()"><i class="fas fa-download"></i> Export</button>
-                <button class="mod-bkp-btn mod-bkp-imp" onclick="document.getElementById('file-inp-vendors-bkp').click()"><i class="fas fa-upload"></i> Import</button>
-                <input type="file" id="file-inp-vendors-bkp" accept=".json" style="display:none;" onchange="window.importVendorsModular(event)">
+                <span style="font-size:0.8rem; font-weight:800; color:#475569;"><i class="fas fa-truck-loading"></i> Companies Transfer:</span>
+                <button class="mod-cp-btn mod-cp-copy" onclick="window.copyVendorsData()"><i class="fas fa-copy"></i> Copy Data</button>
+                <button class="mod-cp-btn mod-cp-paste" onclick="window.openPasteVendors()"><i class="fas fa-paste"></i> Paste & Restore</button>
             `;
             vhBody.insertBefore(bar, vhBody.firstChild);
         }
 
-        // ایڈمن موڈ کے مطابق بارز کو دکھائیں یا چھپائیں
-        document.querySelectorAll('.modular-backup-bar').forEach(b => {
-            b.classList.toggle('admin-visible', isAdminMode);
+        // سیکیورٹی: ایڈمن لاگ ان کے حساب سے ڈسپلے تبدیل کرنا
+        document.querySelectorAll('.mod-copypaste-bar').forEach(b => {
+            b.classList.toggle('admin-active', isAdminMode);
         });
     }
 
-    // وقتاً فوقتاً چیک کریں تاکہ ایڈمن لاگ ان ہوتے ہی بار خود بخود ظاہر ہو جائے
-    setInterval(setupModularBars, 1500);
+    // ہر سیکنڈ بعد ایڈمن چیک کرے گا تاکہ لاگ ان ہوتے ہی بٹنز نمودار ہو جائیں
+    setInterval(injectCopyPasteBars, 1500);
 
 })();
 </script>
